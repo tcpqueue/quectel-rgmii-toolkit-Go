@@ -649,7 +649,7 @@
         '小区扫描': 'Cell Scan',
         '小区扫描将扫描您所在区域的所有LTE和NR5G-SA小区。扫描可能会断开您的网络连接，并需要几分钟完成。': 'Cell scan will scan all LTE and NR5G-SA cells in your area. The scan may interrupt your network connection and may take a few minutes.',
         '选择': 'Select',
-        '频率': 'Frequency',
+        '频点': 'ARFCN',
         '信号': 'Signal',
         '收件箱': 'Inbox',
         '读取短信...': 'Reading SMS...',

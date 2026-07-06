@@ -103,7 +103,7 @@ function cellLocking() {
                   <th scope="col">网络</th>
                   <th scope="col">运营商</th>
                   <th scope="col">频段</th>
-                  <th scope="col">频率</th>
+                  <th scope="col">频点</th>
                   <th scope="col">PCI</th>
                   <th scope="col">RSRP</th>
                   <th scope="col">信号</th>
