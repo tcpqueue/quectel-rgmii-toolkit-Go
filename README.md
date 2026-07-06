@@ -20,8 +20,6 @@ https://onecompiler.com/python/3znepjcsq
 
 重启指令：
 AT+CFUN=1,1
-安装此版本请务必卸载之前任何版本的webui，否则无法正常运行，如无法卸载可以发送恢复出厂指令AT+QCFG="ResetFactory"指令后，在刷一遍固件即可，发送恢复出厂后需要重新设置开启网口和开启adb。
-
 
 ## 目录结构
 
