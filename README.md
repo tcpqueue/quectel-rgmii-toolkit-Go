@@ -4,6 +4,22 @@ SimpleAdmin Go 是一个面向模块设备的本地管理 Web 项目。项目由
 
 M28无系统权限的模块也可以刷入后自动启动，正常开启adb后下载整个项目文件，运行toolkit.bat即可，是完全离线安装。
 
+安装此版本请务必卸载之前任何版本的webui，否则无法正常运行，如无法卸载可以发送恢复出厂指令AT+QCFG="ResetFactory"指令后，在刷固件后即可，发送恢复出厂后需要重新设置开启网口和开启adb。
+
+开启ETH网口指令：
+AT+QCFG="data_interface",0,0;+QCFG="pcie/mode",1;+QETH="eth_driver","r8125",1;+QCFG="usbnet",1;+QMAPWAC=1
+
+关闭ETH网口指令：
+AT+QCFG="data_interface",0,0;+QCFG="pcie/mode",0;+QETH="eth_driver","r8125",0;+QCFG="usbnet",0;+QMAPWAC=0
+
+查询ADBKEY指令：
+AT+QADBKEY?
+
+计算ADB密码：
+https://onecompiler.com/python/3znepjcsq
+
+重启指令：
+AT+CFUN=1,1
 安装此版本请务必卸载之前任何版本的webui，否则无法正常运行，如无法卸载可以发送恢复出厂指令AT+QCFG="ResetFactory"指令后，在刷一遍固件即可，发送恢复出厂后需要重新设置开启网口和开启adb。
 
 
