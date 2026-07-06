@@ -1,0 +1,24 @@
+#!/bin/sh
+
+AUTH_FILE="/usrdata/simpleadmin/simpleadmin.auth"
+USER_NAME="admin"
+
+echo "请设置 SimpleAdmin（用户：admin）网页登录密码。"
+printf "请输入新密码: "
+stty -echo
+read -r PASSWORD
+stty echo
+printf "\n"
+
+if [ -z "$PASSWORD" ]; then
+    echo "密码不能为空。"
+    exit 1
+fi
+
+mkdir -p /usrdata/simpleadmin
+umask 077
+printf "%s:%s\n" "$USER_NAME" "$PASSWORD" > "$AUTH_FILE"
+chmod 600 "$AUTH_FILE"
+
+systemctl restart simpleadmin-httpd >/dev/null 2>&1 || true
+echo "密码已设置。"
