@@ -55,8 +55,8 @@ Simple_Admin_GO/
 
 | 文件 | 作用 |
 |---|---|
-| `toolkit.bat` | Windows 一键安装入口。等待 ADB 设备，推送 `development/` 到模块，并调用模块端安装脚本；安装前会清理旧 `/tmp/simpleadmin-reboot-required` 和 `/tmp/simpleadmin-install-result.env`；安装成功后通过 `adb pull` 把本次 `/tmp/simpleadmin-install-result.env` 拉到 Windows 临时目录解析，只在 `REBOOT_REQUIRED=1` 时自动发送重启命令，避免 Windows `cmd.exe` 把远端 `/dev/null` 或 shell 重定向误解析成本地路径；会先显示安装成功，再直接重启设备，不再询问确认或提供跳过选项；批处理窗口输出中文提示，安装过程中模块端 sh 脚本显示到 bat 窗口的日志也使用中文；批处理文件使用 UTF-8 编码和 CRLF 换行，启动时只设置一次 UTF-8 代码页，运行过程中不再来回切换代码页，避免控制台清屏/闪屏；批处理自身输出恢复为 `[信息] ...`、`[成功] ...`、`[错误] ...` 中文前缀；成功/重启分支保持纯 `goto` 流程，不在括号代码块里执行中文输出或重启命令，避免部分 Windows cmd 环境把嵌套括号块误解析成独立的 `]` 命令；需要重启时不再显示重启确认提示，等待按键也改为中文提示，同时保证远端 UTF-8 中文输出在 bat 窗口正常显示；安装结果以模块端写出的 `/tmp/simpleadmin-install-result.env` 为准，即使设备上的 adb shell 不正确传递退出码，也不会在远端脚本失败时继续显示安装成功。 |
-| `uninstall.bat` | Windows 一键卸载入口。通过 ADB 调用模块端卸载脚本；批处理窗口输出中文提示，卸载过程中模块端 sh 脚本显示到 bat 窗口的日志也使用中文；批处理文件使用 UTF-8 编码和 CRLF 换行，启动时只设置一次 UTF-8 代码页，运行过程中不再来回切换代码页，避免控制台清屏/闪屏；批处理自身输出恢复为 `[信息] ...`、`[成功] ...`、`[错误] ...` 中文前缀，并保持纯 `goto` 流程，不在括号代码块里执行中文输出，避免部分 Windows cmd 环境把嵌套括号块误解析成独立的 `]` 命令，同时保证远端 UTF-8 中文输出在 bat 窗口正常显示。 |
+| `toolkit.bat` | Windows 一键安装入口。等待 ADB 设备，推送 `development/` 到模块，并调用模块端安装脚本。 |
+| `uninstall.bat` | Windows 一键卸载入口。通过 ADB 调用模块端卸载脚本。 |
 | `run_windows_test.bat` | Windows 本地测试入口，启动 `windows-test` 中的测试服务；批处理窗口输出中文提示，使用 GBK/CP936 编码和 CRLF 换行，避免 Windows cmd 误解析中文行。 |
 | `adb.exe` | Windows ADB 可执行文件。 |
 | `AdbWinApi.dll` / `AdbWinUsbApi.dll` | Windows ADB 运行所需动态库。 |
