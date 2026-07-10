@@ -2,24 +2,41 @@
 
 SimpleAdmin Go 是一个面向模块设备的本地管理 Web 项目。项目由 Go 后端、Vue 3 前端、安装/卸载脚本、Windows 本地测试工具和模块端服务启动逻辑组成。后端负责静态页面托管、认证、AT 通道、短信、TTL、控制台和基础状态接口；前端负责设备信息、网络设置、短信、系统设置等页面交互。
 
-M28无系统权限的模块也可以刷入后自动启动，正常开启adb后下载整个项目文件，运行toolkit.bat即可，是完全离线安装。
+M28无系统权限的模块也可以刷入后自动启动。
 
-安装此版本请务必卸载之前任何版本的webui，否则无法正常运行，如无法卸载可以发送恢复出厂指令AT+QCFG="ResetFactory"指令后，在刷固件后即可，发送恢复出厂后需要重新设置开启网口和开启adb。
 
-开启ETH网口指令：
-AT+QCFG="data_interface",0,0;+QCFG="pcie/mode",1;+QETH="eth_driver","r8125",1;+QCFG="usbnet",1;+QMAPWAC=1
+安装此版本请务必卸载之前任何版本的webui，否则无法正常运行。
+安装此版本请务必卸载之前任何版本的webui，否则无法正常运行。
+安装此版本请务必卸载之前任何版本的webui，否则无法正常运行。
+重要的事说三遍
 
-关闭ETH网口指令：
-AT+QCFG="data_interface",0,0;+QCFG="pcie/mode",0;+QETH="eth_driver","r8125",0;+QCFG="usbnet",0;+QMAPWAC=0
+如无法卸载可以发送恢复出厂指令AT+QCFG="ResetFactory"指令后，在刷固件后即可，发送恢复出厂后需要重新设置开启网口和开启adb。
 
-查询ADBKEY指令：
-AT+QADBKEY?
+开启ETH网口指令： AT+QCFG="data_interface",0,0;+QCFG="pcie/mode",1;+QETH="eth_driver","r8125",1;+QCFG="usbnet",1;+QMAPWAC=1
 
-计算ADB密码：
-https://onecompiler.com/python/3znepjcsq
+关闭ETH网口指令： AT+QCFG="data_interface",0,0;+QCFG="pcie/mode",0;+QETH="eth_driver","r8125",0;+QCFG="usbnet",0;+QMAPWAC=0
 
-重启指令：
-AT+CFUN=1,1
+开ADB步骤
+1，查询ADBKEY指令： AT+QADBKEY?
+
+2，计算ADB密码： https://onecompiler.com/python/3znepjcsq
+
+3，查询当前配置：AT+QCFG="usbcfg"
+返回的结果是+QCFG: "usbcfg",0xXXXX,0xXXXX,1,1,1,1,1,0,0
+改倒数第二位的0改成1
+
+4，发送AT+QCFG="usbcfg",0xXXXX,0xXXXX,1,1,1,1,1,1,0（注意0xXXXX,0xXXXX要改成查询到的值）
+
+5，重启指令： AT+CFUN=1,1
+
+正常开启ADB后，运行toolkit.bat即可安装，是完全离线安装。
+
+后台默认地址192.168.225.1，账号密码都是admin，控制台账号root 密码admin321
+
+安装成功后如果打不开后台就清理一下浏览器缓存，注意是http不带s
+安装成功后如果打不开后台就清理一下浏览器缓存，注意是http不带s
+安装成功后如果打不开后台就清理一下浏览器缓存，注意是http不带s
+重要的事说三遍
 
 ## 目录结构
 
