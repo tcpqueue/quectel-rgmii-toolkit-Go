@@ -38,6 +38,7 @@
 <link href="css/bootstrap.min.css" rel="stylesheet"/>
 <link href="css/Poppins.css?v=2.94" rel="stylesheet"/>
 <link href="css/styles.css?v=2.94" rel="stylesheet"/>
+<link href="css/art-device.css?v=3.0" rel="stylesheet"/>
 <link href="favicon.ico" rel="icon"/>
 <script src="js/band_map.js?v=2.94"></script>
 <script defer="" src="js/bootstrap.bundle.min.js"></script>
@@ -54,36 +55,49 @@
 </div>
 <nav class="sa-menu">
 <a aria-current="page" class="sa-menu-link active" data-page-link="dashboard" href="#dashboard">
-<span class="sa-menu-dot"></span>
+<i data-lucide="layout-dashboard" aria-hidden="true"></i>
 <span data-simpleadmin-i18n-key="总览">总览</span>
 </a>
 <a class="sa-menu-link" data-page-link="network" href="#network">
-<span class="sa-menu-dot"></span>
+<i data-lucide="radio" aria-hidden="true"></i>
 <span data-simpleadmin-i18n-key="网络与小区">网络与小区</span>
 </a>
 <a class="sa-menu-link" data-page-link="settings" href="#settings">
-<span class="sa-menu-dot"></span>
+<i data-lucide="settings" aria-hidden="true"></i>
 <span data-simpleadmin-i18n-key="系统设置">系统设置</span>
 </a>
 <a class="sa-menu-link" data-page-link="sms" href="#sms">
-<span class="sa-menu-dot"></span>
+<i data-lucide="message-square" aria-hidden="true"></i>
 <span data-simpleadmin-i18n-key="短信服务">短信服务</span>
 </a>
 <a class="sa-menu-link" data-page-link="deviceinfo" href="#deviceinfo">
-<span class="sa-menu-dot"></span>
+<i data-lucide="info" aria-hidden="true"></i>
 <span data-simpleadmin-i18n-key="设备信息">设备信息</span>
 </a>
 <a class="sa-menu-link" data-page-link="console" href="#console">
-<span class="sa-menu-dot"></span>
+<i data-lucide="terminal" aria-hidden="true"></i>
 <span data-simpleadmin-i18n-key="控制台">控制台</span>
 </a>
 <a class="sa-menu-link" data-logout-link="1" href="/api/logout">
-<span class="sa-menu-dot"></span>
+<i data-lucide="log-out" aria-hidden="true"></i>
 <span data-simpleadmin-i18n-key="退出登录">退出登录</span>
 </a>
 </nav>
 </aside>
+<button aria-label="关闭菜单" class="art-backdrop" hidden id="artSidebarBackdrop" type="button"></button>
 <div class="sa-main">
+<header class="art-header">
+<div class="art-header-left">
+<button aria-label="展开或收起菜单" title="展开或收起菜单" class="art-icon-button" id="artMenuButton" type="button"><i data-lucide="menu" aria-hidden="true"></i></button>
+<button aria-label="刷新页面" title="刷新页面" class="art-icon-button" id="artRefreshButton" type="button"><i data-lucide="rotate-cw" aria-hidden="true"></i></button>
+<span class="art-breadcrumb">设备管理 <i data-lucide="chevron-right" aria-hidden="true"></i> <strong id="artCurrentPage">总览</strong></span>
+</div>
+<div class="art-header-right">
+<button aria-label="切换明暗主题" title="切换明暗主题" class="art-icon-button" id="artThemeButton" type="button"><i data-lucide="moon" aria-hidden="true"></i></button>
+<button aria-label="全屏" title="全屏" class="art-icon-button" id="artFullscreenButton" type="button"><i data-lucide="maximize" aria-hidden="true"></i></button>
+<a class="art-account" data-page-link="settings" href="#settings" title="账户设置"><span class="art-avatar">A</span><span>管理员</span></a>
+</div>
+</header>
 <main class="sa-content">
 <section aria-labelledby="page-title-dashboard" class="sa-page active" data-page="dashboard" id="page-dashboard">
 <div class="sa-page-titlebar">
@@ -94,6 +108,32 @@
 <button class="btn btn-outline-secondary btn-sm sa-sidebar-toggle" data-simpleadmin-i18n-key="菜单" type="button">菜单</button>
 <button class="btn btn-outline-secondary btn-sm sa-titlebar-theme-toggle" data-simpleadmin-i18n-key="暗夜模式" type="button">暗夜模式</button>
 </div>
+</div>
+<div id="monitorApp" class="art-monitor" v-cloak>
+<div class="art-monitor-heading"><span class="art-live-state" :class="{ 'is-error': error || (latestPing && latestPing.status !== 'ok') }"><span></span>{{ error ? '读取失败' : statusLabel(latestPing ? latestPing.status : 'pending') }}</span><span class="art-sample-meta">最近 5 分钟</span><span v-if="snapshot.mock" class="art-mock-badge">模拟数据</span></div>
+<div class="art-stats">
+<article class="art-stat"><div><span>当前延迟</span><strong>{{ number(latestPing && latestPing.rtt) }} <small>ms</small></strong><p>{{ snapshot.target }}</p></div><span class="art-stat-icon blue"><i data-lucide="wifi" aria-hidden="true"></i></span></article>
+<article class="art-stat"><div><span>平均抖动</span><strong>{{ number(snapshot.summary.jitter) }} <small>ms</small></strong><p>相邻 RTT 绝对差</p></div><span class="art-stat-icon green"><i data-lucide="activity" aria-hidden="true"></i></span></article>
+<article class="art-stat"><div><span>丢包率</span><strong>{{ number(snapshot.summary.loss) }} <small>%</small></strong><p>{{ snapshot.summary.received || 0 }} / {{ snapshot.summary.sent || 0 }} 应答</p></div><span class="art-stat-icon amber"><i data-lucide="radio" aria-hidden="true"></i></span></article>
+<article class="art-stat"><div><span>模块温度</span><strong>{{ number(latestSignal && latestSignal.temperature) }} <small>°C</small></strong><p>{{ signalTime }}</p></div><span class="art-stat-icon coral"><i data-lucide="thermometer" aria-hidden="true"></i></span></article>
+</div>
+<div class="art-signal-layout">
+<section class="art-chart-section" aria-labelledby="signalChartTitle">
+<div class="art-section-heading"><div><h2 id="signalChartTitle">无线信号</h2><span>5 秒采样</span></div><div class="art-segmented" role="group" aria-label="无线制式"><button :aria-pressed="radio === 'NR'" :class="{ active: radio === 'NR' }" @click="setRadio('NR')" type="button">5G NR</button><button :aria-pressed="radio === 'LTE'" :class="{ active: radio === 'LTE' }" @click="setRadio('LTE')" type="button">4G LTE</button></div></div>
+<div class="art-chart-wrap"><div id="signalChart" class="art-chart" role="img" :aria-label="radio + ' RSRP 和 SINR 最近五分钟走势图'"></div><div class="art-chart-empty" v-if="!hasSignal">等待 {{ radio }} 信号数据</div></div>
+</section>
+<section class="art-chart-section" aria-labelledby="temperatureChartTitle">
+<div class="art-section-heading"><div><h2 id="temperatureChartTitle">温度趋势</h2><span>°C · 5 秒采样</span></div><i data-lucide="thermometer" aria-hidden="true"></i></div>
+<div class="art-chart-wrap"><div id="temperatureChart" class="art-chart" role="img" aria-label="模块温度最近五分钟走势图"></div><div class="art-chart-empty" v-if="!hasTemperature">等待温度数据</div></div>
+</section>
+</div>
+<section class="art-chart-section art-ping-section" aria-labelledby="pingChartTitle">
+<div class="art-section-heading"><div><h2 id="pingChartTitle">延迟与抖动</h2><span>ICMP · 1 秒采样</span></div><form class="art-target-form" @submit.prevent="saveTarget"><label class="visually-hidden" for="pingTarget">Ping 目标</label><input id="pingTarget" :disabled="saving" v-model="targetInput" @input="targetDirty = true" class="form-control" placeholder="www.baidu.com" maxlength="253" required autocomplete="off" spellcheck="false"/><button class="btn btn-primary" :disabled="saving || !targetDirty" type="submit">{{ saving ? '保存中…' : '应用' }}</button></form></div>
+<p class="art-target-message" role="status" v-if="targetMessage">{{ targetMessage }}</p>
+<p class="art-target-message is-error" role="alert" v-if="error">{{ error }} <button class="art-text-button" @click="refresh" type="button">重试</button></p>
+<div class="art-chart-wrap"><div id="pingChart" class="art-chart art-ping-chart" role="img" aria-label="最近五分钟延迟、抖动和失败采样走势图"></div><div class="art-chart-empty" v-if="!snapshot.ping.length">等待首次采样</div></div>
+<div class="art-chart-footer"><span>平均 <b>{{ number(snapshot.summary.average) }}</b> ms</span><span>最低 <b>{{ number(snapshot.summary.minimum) }}</b> ms</span><span>最高 <b>{{ number(snapshot.summary.maximum) }}</b> ms</span><span class="art-failure-key">失败 {{ failedSamples }} 次</span><span>{{ latestPing && latestPing.ip ? latestPing.ip : snapshot.target }}</span></div>
+</section>
 </div>
 <div class="sa-page-app sa-single-column" id="dashboardApp" v-cloak="">
 <div class="sa-section-stack sa-metric-grid">
@@ -1161,5 +1201,8 @@
 <script src="js/pages/deviceinfo.js?v=2.94"></script>
 <script src="js/simpleadmin-spa.js?v=2.94"></script>
 <script src="js/dark-mode.js?v=2.94"></script>
+<script src="js/monitor-vendor.js?v=3.0"></script>
+<script src="js/monitor.js?v=3.0"></script>
+<script src="js/art-device.js?v=3.0"></script>
 </body>
 </html>

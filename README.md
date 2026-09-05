@@ -1071,6 +1071,33 @@ go-build\build_simpleadmin_go.bat
 
 该脚本应使用 Go 1.26.3；AT 写入流程默认直接使用 `/dev/smd11`，首次真实 AT 请求会启动独立 reader 子进程保持读取端，写入端使用 `/bin/sh -c 'cat > "$1"'` 接收 stdin payload 并重定向写入 `/dev/smd11`，不使用 `printf` 拼接命令；reader 使用 4096 字节读取大小并在打开设备成功后再允许 writer 发送，响应完成以 AT 终止行 `OK`、`ERROR`、`+CME ERROR`、`+CMS ERROR` 为准，不靠固定 kill；运行时不创建 `socat`、`/dev/ttyIN`、`/dev/ttyOUT` 或读写桥接；查询型 `AT+QMAP="LANIP"` 只在固定页面缓存指令 `commonATCacheCommands()` / `pageATCommands()` 中独立成单条，设备信息和网络设置会按静态/配置/实时属性拆分成多条固定缓存指令；手动 AT 和底层发送函数不做通用分号拆分；页面停留和轮询期间不反复清理或重建 `/dev/smd11`。
 
+### 实时监控与界面资源
+
+WebUI 采用 Art Design Pro 的布局和配色进行轻量适配，保留现有 Vue 页面和设备接口。侧栏支持折叠，手机端使用抽屉菜单，顶栏提供主题切换、刷新、全屏和账户入口。修改密码位于“系统设置”的“账户安全”。
+
+总览中的无线信号图同时显示 RSRP 与 SINR 两条曲线：左轴为 RSRP（dBm），右轴为 SINR（dB），可以切换 5G NR 和 4G LTE。温度使用独立图表。
+
+| 数据 | 采样周期 | 保存范围 |
+|---|---|---|
+| RSRP、SINR、温度 | 5 秒 | 最近 5 分钟，共用 60 个采样时间点 |
+| ICMP 延迟、抖动 | 1 秒 | 最近 5 分钟，最多 300 个采样时间点 |
+
+采样由后端启动，与网页是否打开无关。历史仅保存在内存中，进程重启后清空。AT 查询复用有界队列；设备忙或查询失败时可能出现缺测，图表保留空缺，不填充零值。Ping 单次检测最多 900 毫秒，断网后持续重试，恢复连通后自动继续获得延迟。
+
+Ping 默认目标为 `www.baidu.com`，可在总览中修改为域名或 IP，不接受协议、路径或端口。只有目标配置保存到认证文件同目录的 `monitor.json`；更换目标清空 Ping 历史，保留信号和温度历史。抖动为连续成功应答的相邻 RTT 绝对差，失败或采样间隔过长时不跨缺口计算；丢包率仅统计实际发送的 ICMP 包，DNS 和权限错误单独计数。Linux 优先使用非特权 ICMP，不允许时尝试原始套接字；均无权限时页面显示权限错误。
+
+`GET /api/telemetry` 返回当前内存快照，`POST /api/telemetry/target` 接收 `{"target":"www.baidu.com"}`。两者均要求有效登录会话。`-mock` 模式使用模拟曲线，页面明确标记“模拟数据”。
+
+图表和图标在本地提供，正常访问页面无需外部 CDN。修改第三方资源后，在 Linux 原生项目目录执行：
+
+```sh
+cd web-assets
+npm ci
+npm run build
+```
+
+构建源文件及锁文件位于 `web-assets/`，产物为 `development/simpleadmin/www/js/monitor-vendor.js`。Art Design Pro、ECharts 和 Lucide 的许可文件保留在 `development/simpleadmin/www/licenses/`。Go 模块最低版本为 1.23，发布构建使用 Go 1.26.3。
+
 ## 1. 后续代码修改方法
 
 后续修改代码时，必须把改动限制在当前目标需要的最小范围内，并遵守以下四个原则。

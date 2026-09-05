@@ -1,0 +1,8 @@
+{
+  "name": "simpleadmin-web-assets",
+  "private": true,
+  "type": "module",
+  "scripts": { "build": "node build.mjs" },
+  "dependencies": { "echarts": "6.1.0", "lucide": "0.468.0" },
+  "devDependencies": { "esbuild": "0.25.0" }
+}

@@ -150,6 +150,8 @@ func runServeCommand(args []string) {
 	cleanupContext, stopCleanup := context.WithCancel(context.Background())
 	defer stopCleanup()
 	go app.cleanupSessions(cleanupContext)
+	app.telemetry = newTelemetryMonitor(filepath.Join(filepath.Dir(cfg.authFile), "monitor.json"), cfg.mockMode)
+	app.telemetry.start(cleanupContext)
 	handler := app.routes()
 
 	if cfg.noTLS {
@@ -187,6 +189,7 @@ type simpleAdminServer struct {
 	sessionMu          sync.Mutex
 	sessions           map[string]time.Time
 	sessionConnections map[net.Conn]string
+	telemetry          *telemetryMonitor
 
 	modelMu           sync.RWMutex
 	cachedModuleModel string
@@ -197,6 +200,8 @@ func (s *simpleAdminServer) routes() http.Handler {
 	mux.HandleFunc("/api/login", s.handleLogin)
 	mux.HandleFunc("/api/logout", s.handleLogout)
 	mux.HandleFunc("/api/set_password", s.handleSetPassword)
+	mux.HandleFunc("/api/telemetry", s.handleTelemetry)
+	mux.HandleFunc("/api/telemetry/target", s.handleTelemetryTarget)
 	mux.HandleFunc("/api/module_model", s.handleModuleModel)
 	mux.HandleFunc("/login.html", s.handleLoginPage)
 	mux.HandleFunc("/logout.html", s.handleLogoutPage)
@@ -212,6 +217,8 @@ func (s *simpleAdminServer) routes() http.Handler {
 
 func (s *simpleAdminServer) nativeAPIHandlers() map[string]http.HandlerFunc {
 	return map[string]http.HandlerFunc{
+		"/api/telemetry":        s.handleTelemetry,
+		"/api/telemetry/target": s.handleTelemetryTarget,
 		"/api/get_atcache":      s.handleGetATCache,
 		"/api/get_atcommand":    s.handleGetATCommand,
 		"/api/user_atcommand":   s.handleGetATCommand,
