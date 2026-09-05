@@ -5,6 +5,12 @@ const vm = require('node:vm');
 const context = { window: {}, document: { readyState: 'loading', addEventListener() {} } };
 vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, '../development/simpleadmin/www/js/monitor.js'), 'utf8'), context);
 const { chartOptions } = context.window.SimpleAdminMonitor;
+test('radio choices hide missing LTE and retain zero SINR', () => {
+ const modes = context.window.SimpleAdminMonitor.availableRadioModes;
+ assert.equal(JSON.stringify(modes({signal:[{rsrpNR:-80,sinrNR:14,rsrpLTE:null,sinrLTE:null}]})), '["NR"]');
+ assert.equal(JSON.stringify(modes({signal:[{rsrpNR:null,sinrNR:null,rsrpLTE:null,sinrLTE:0}]})), '["LTE"]');
+ assert.equal(JSON.stringify(modes({signal:[]})), '[]');
+});
 test('signal uses exactly two legends and independent units on opposite axes', () => {
   const data = { serverTime: 600000, signal: [{ time: 590000, rsrpNR: -95, sinrNR: 22, rsrpLTE: -89, sinrLTE: 18, temperature: 43 }, { time: 595000, rsrpNR: null, sinrNR: null, temperature: null }], ping: [{ time: 599000, rtt: null, jitter: null, status: 'timeout' }] };
   const options = chartOptions(data, 'NR', {}, true);

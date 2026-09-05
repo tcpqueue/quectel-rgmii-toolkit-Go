@@ -50,7 +50,11 @@
     return { signal, temperature, ping };
   }
 
-  global.SimpleAdminMonitor = { chartOptions, number, statusNames };
+  function availableRadioModes(snapshot) {
+    const latest = snapshot.signal[snapshot.signal.length - 1];
+    return latest ? ['NR', 'LTE'].filter(radio => ['rsrp', 'sinr'].some(key => latest[key + radio] !== null && latest[key + radio] !== undefined && Number.isFinite(latest[key + radio]))) : [];
+  }
+  global.SimpleAdminMonitor = { chartOptions, number, statusNames, availableRadioModes };
 
   function mount() {
     const element = document.getElementById('monitorApp');
@@ -60,7 +64,6 @@
     let controller = null;
     let fetching = false;
     let requestEpoch = 0;
-    let signalChoiceMade = false;
     let app;
     const active = () => !document.hidden && !!document.querySelector('#page-dashboard.active');
     const stop = () => { clearTimeout(timer); timer = null; if (controller) controller.abort(); };
@@ -80,15 +83,14 @@
     const update = data => {
       app.snapshot = data;
       if (!app.targetDirty) app.targetInput = data.target;
-      if (!signalChoiceMade && data.signal.length) {
-        if (!data.signal.some(sample => sample.rsrpNR !== null || sample.sinrNR !== null) && data.signal.some(sample => sample.rsrpLTE !== null || sample.sinrLTE !== null)) app.radio = 'LTE';
-        signalChoiceMade = true;
-      }
+      const radios = availableRadioModes(data);
+      if (radios.length && !radios.includes(app.radio)) app.radio = radios[0];
       app.$nextTick(render);
     };
     app = global.Vue.createApp({
       data: () => ({ snapshot: { target: 'www.baidu.com', generation: 0, serverTime: Date.now(), ping: [], signal: [], summary: {}, mock: false }, radio: 'NR', targetInput: 'www.baidu.com', targetDirty: false, targetMessage: '', saving: false, error: '' }),
       computed: {
+        availableRadios() { return availableRadioModes(this.snapshot); },
         latestPing() { return this.snapshot.ping[this.snapshot.ping.length - 1] || null; },
         latestSignal() { return this.snapshot.signal[this.snapshot.signal.length - 1] || null; },
         signalTime() { return this.latestSignal ? clock(this.latestSignal.time) : '等待采样'; },
@@ -99,7 +101,7 @@
       methods: {
         number,
         statusLabel(status) { return statusNames[status] || '等待采样'; },
-        setRadio(radio) { this.radio = radio; signalChoiceMade = true; render(); },
+        setRadio(radio) { this.radio = radio; render(); },
         async refresh() {
           if (!active() || fetching || this.saving) return;
           clearTimeout(timer);
