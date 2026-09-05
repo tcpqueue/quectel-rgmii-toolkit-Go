@@ -40,6 +40,11 @@ function simpleSettings() {
         confirmPassword: "",
         isSavingPassword: false,
         passwordSaveMessage: "",
+        currentRootPassword: "",
+        newRootPassword: "",
+        confirmRootPassword: "",
+        isSavingRootPassword: false,
+        rootPasswordSaveMessage: "",
         rebootCountdownTimer: null,
 
         t(key) {
@@ -82,6 +87,26 @@ function simpleSettings() {
             .finally(() => {
               this.isSavingLanguage = false;
             });
+        },
+
+        async changeRootPassword() {
+          if(this.isSavingRootPassword) return;
+          this.rootPasswordSaveMessage = '';
+          if(!this.currentRootPassword || !this.newRootPassword || this.newRootPassword !== this.confirmRootPassword) {
+            this.rootPasswordSaveMessage = '请填写当前 root 密码，并确认两次新密码一致'; return;
+          }
+          this.isSavingRootPassword = true;
+          const controller = new AbortController();
+          const deadline = setTimeout(() => controller.abort(), 40000);
+          try {
+            const response = await fetch('/api/set_root_password', {method:'POST', signal:controller.signal, headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:new URLSearchParams({current_password:this.currentRootPassword,new_password:this.newRootPassword,confirm_password:this.confirmRootPassword})});
+            if(response.status === 401) {window.location.replace('/login.html');return;}
+            const data = await response.json();
+            if(!response.ok) throw new Error(data.error || '保存失败');
+            this.currentRootPassword = this.newRootPassword = this.confirmRootPassword = '';
+            window.location.replace('/login.html');
+          } catch(error) {this.rootPasswordSaveMessage = error.name === 'AbortError' ? '请求超时，请确认设备密码与挂载状态' : error.message;}
+          finally {clearTimeout(deadline);this.isSavingRootPassword=false;}
         },
 
         changeLoginPassword() {

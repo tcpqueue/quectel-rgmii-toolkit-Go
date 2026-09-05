@@ -65,6 +65,21 @@ func (s *persistenceStore) write(files ...persistentFile) (result error) {
 	if len(changed) == 0 {
 		return nil
 	}
+	return s.mutate(managed, func() (bool, error) {
+		committed := false
+		for _, file := range changed {
+			renamed, err := replacePersistentFile(file)
+			committed = committed || renamed
+			if err != nil {
+				return committed, fmt.Errorf("save %s: %w", filepath.Base(file.path), err)
+			}
+		}
+		return committed, nil
+	})
+}
+
+// Caller holds both configuration locks while mutating files or invoking passwd.
+func (s *persistenceStore) mutate(managed bool, action func() (bool, error)) (result error) {
 	committed := false
 	defer func() {
 		if result != nil && committed {
@@ -78,14 +93,8 @@ func (s *persistenceStore) write(files ...persistentFile) (result error) {
 			return err
 		}
 	}
-	for _, file := range changed {
-		renamed, err := replacePersistentFile(file)
-		committed = committed || renamed
-		if err != nil {
-			return fmt.Errorf("save %s: %w", filepath.Base(file.path), err)
-		}
-	}
-	return nil
+	committed, result = action()
+	return result
 }
 
 func replacePersistentFile(file persistentFile) (bool, error) {

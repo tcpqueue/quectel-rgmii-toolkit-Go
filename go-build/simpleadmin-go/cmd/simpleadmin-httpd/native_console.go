@@ -28,7 +28,6 @@ const websocketGUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 const (
 	nativeConsoleUsername         = "root"
-	nativeConsolePassword         = "admin321"
 	nativeConsoleMaxLoginAttempts = 3
 )
 
@@ -317,7 +316,7 @@ func (s *simpleAdminServer) handleNativeConsoleWebSocket(w http.ResponseWriter, 
 	}
 	defer untrack()
 
-	if !authenticateNativeConsole(ws) {
+	if !s.authenticateNativeConsole(ws) {
 		return
 	}
 	if !s.isRequestAuthenticated(r) {
@@ -421,7 +420,7 @@ func normalizeOriginHost(host string) string {
 	return host
 }
 
-func authenticateNativeConsole(ws *nativeWSConn) bool {
+func (s *simpleAdminServer) authenticateNativeConsole(ws *nativeWSConn) bool {
 	_ = ws.writeBinary([]byte("Terminal login required\r\n"))
 	for attempt := 0; attempt < nativeConsoleMaxLoginAttempts; attempt++ {
 		username, ok := readNativeConsoleLine(ws, "login: ", false)
@@ -432,7 +431,10 @@ func authenticateNativeConsole(ws *nativeWSConn) bool {
 		if !ok {
 			return false
 		}
-		if constantTimeEqual(strings.TrimSpace(username), nativeConsoleUsername) && constantTimeEqual(password, nativeConsolePassword) {
+		s.authMu.Lock()
+		valid := constantTimeEqual(strings.TrimSpace(username), nativeConsoleUsername) && s.rootPasswordMatches(password)
+		s.authMu.Unlock()
+		if valid {
 			_ = ws.writeBinary([]byte("\r\n"))
 			return true
 		}

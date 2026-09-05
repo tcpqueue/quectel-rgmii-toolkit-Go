@@ -454,12 +454,9 @@ func TestConsoleWebSocketOriginAllowed(t *testing.T) {
 	}
 }
 
-func TestNativeConsoleRequiresFixedCredentials(t *testing.T) {
+func TestNativeConsoleUsesRootAccount(t *testing.T) {
 	if nativeConsoleUsername != "root" {
 		t.Fatalf("nativeConsoleUsername = %q, want root", nativeConsoleUsername)
-	}
-	if nativeConsolePassword != "admin321" {
-		t.Fatalf("nativeConsolePassword = %q, want admin321", nativeConsolePassword)
 	}
 }
 

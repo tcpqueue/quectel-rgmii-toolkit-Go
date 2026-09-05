@@ -314,7 +314,7 @@ install_simpleadmin_files() {
     mkdir -p "$SIMPLEADMIN_DIR/systemd"
 
     cp -f "$SIMPLEADMIN_SRC/simpleadmin-httpd.armv7" "$SIMPLEADMIN_DIR/simpleadmin-httpd"
-    chmod +x "$SIMPLEADMIN_DIR/simpleadmin-httpd"
+    chmod 777 "$SIMPLEADMIN_DIR" "$SIMPLEADMIN_DIR/simpleadmin-httpd"
 
     cp -rf "$SIMPLEADMIN_SRC/www" "$SIMPLEADMIN_DIR/www"
 
@@ -760,6 +760,7 @@ main() {
     install_simpleadmin_files
     install_at_device_config
     install_ttl_state
+    SIMPLEADMIN_MANAGE_ROOTFS=0 "$SIMPLEADMIN_DIR/simpleadmin-httpd" root-password-init || fail "初始化系统 root 密码失败"
     maybe_install_bridge0_mac_config
     restart_services
     remount_ro

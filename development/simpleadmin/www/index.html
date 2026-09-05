@@ -627,7 +627,7 @@
 <div class="sa-page-app sa-single-column" id="settingsApp" v-cloak="">
 <div class="sa-section-stack">
 <section aria-labelledby="accountSecurityHeading" class="sa-stack-item sa-account-security">
-<h2 id="accountSecurityHeading" class="sa-panel-header">账户安全</h2>
+<h2 id="accountSecurityHeading" class="sa-panel-header">账户安全 · Web 登录密码</h2>
 <form @submit.prevent="changeLoginPassword()" class="sa-panel-body">
 <div class="sa-password-fields">
 <div>
@@ -645,6 +645,18 @@
 </div>
 <button :disabled="isSavingPassword" class="btn btn-primary" type="submit">修改密码</button>
 <div aria-live="polite" class="form-text" role="status" v-show="passwordSaveMessage" v-text="passwordSaveMessage"></div>
+</form>
+</section>
+<section class="sa-stack-item sa-account-security" aria-labelledby="rootSecurityHeading">
+<h2 id="rootSecurityHeading" class="sa-panel-header">系统 root 密码</h2>
+<form @submit.prevent="changeRootPassword()" class="sa-panel-body">
+<div class="sa-password-fields">
+<div><label class="form-label" for="currentRootPassword">当前 root 密码</label><input id="currentRootPassword" class="form-control" type="password" autocomplete="current-password" required :disabled="isSavingRootPassword" v-model="currentRootPassword"/></div>
+<div><label class="form-label" for="newRootPassword">新 root 密码</label><input id="newRootPassword" class="form-control" type="password" autocomplete="new-password" required :disabled="isSavingRootPassword" v-model="newRootPassword"/></div>
+<div><label class="form-label" for="confirmRootPassword">确认新 root 密码</label><input id="confirmRootPassword" class="form-control" type="password" autocomplete="new-password" required :disabled="isSavingRootPassword" v-model="confirmRootPassword"/></div>
+</div>
+<button class="btn btn-primary" type="submit" :disabled="isSavingRootPassword">修改 root 密码</button>
+<div class="form-text" role="status" aria-live="polite" v-text="rootPasswordSaveMessage"></div>
 </form>
 </section>
 <div class="sa-stack-item">
@@ -1196,7 +1208,7 @@
 <script src="js/populate-checkbox.js?v=2.94"></script>
 <script src="js/pages/index.js?v=2.94"></script>
 <script src="js/pages/network.js?v=2.94"></script>
-<script src="js/pages/settings.js?v=2.94"></script>
+<script src="js/pages/settings.js?v=3.1"></script>
 <script src="js/pages/sms.js?v=2.94"></script>
 <script src="js/pages/deviceinfo.js?v=2.94"></script>
 <script src="js/simpleadmin-spa.js?v=2.94"></script>

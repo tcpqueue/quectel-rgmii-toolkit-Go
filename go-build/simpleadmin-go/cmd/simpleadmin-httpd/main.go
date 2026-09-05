@@ -77,6 +77,19 @@ type languageConfig struct {
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	if len(os.Args) > 1 && os.Args[1] == "root-password-init" {
+		marker := filepath.Join(filepath.Dir(defaultAuthFile), "root-password.initialized")
+		if _, err := os.Stat(marker); err == nil {
+			return
+		}
+		if err := changeSystemRootPassword("", "admin", true); err != nil {
+			log.Fatal(err)
+		}
+		if err := writePersistentFile(marker, []byte("1\n"), 0600); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "passwd" {
 		data, err := io.ReadAll(io.LimitReader(os.Stdin, 131))
 		if err == nil {
@@ -205,6 +218,7 @@ type simpleAdminServer struct {
 	sessions           map[string]time.Time
 	sessionConnections map[net.Conn]string
 	telemetry          *telemetryMonitor
+	mockRootPassword   string
 
 	modelMu           sync.RWMutex
 	cachedModuleModel string
@@ -215,6 +229,7 @@ func (s *simpleAdminServer) routes() http.Handler {
 	mux.HandleFunc("/api/login", s.handleLogin)
 	mux.HandleFunc("/api/logout", s.handleLogout)
 	mux.HandleFunc("/api/set_password", s.handleSetPassword)
+	mux.HandleFunc("/api/set_root_password", s.handleSetRootPassword)
 	mux.HandleFunc("/api/telemetry", s.handleTelemetry)
 	mux.HandleFunc("/api/telemetry/target", s.handleTelemetryTarget)
 	mux.HandleFunc("/api/module_model", s.handleModuleModel)
