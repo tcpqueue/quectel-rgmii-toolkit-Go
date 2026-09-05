@@ -4,13 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"math"
 	"net"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -93,8 +91,8 @@ type telemetryMonitor struct {
 	generation uint64
 	configPath string
 	mock       bool
-	ping       historyRing[pingSample]
-	signal     historyRing[signalSample]
+	ping       pingHistory
+	signal     signalHistory
 	probe      func(context.Context, string) pingSample
 	readSignal func() signalSample
 }
@@ -102,8 +100,8 @@ type telemetryMonitor struct {
 func newTelemetryMonitor(configPath string, mock bool) *telemetryMonitor {
 	m := &telemetryMonitor{
 		target: defaultPingTarget, configPath: configPath, mock: mock,
-		ping:   historyRing[pingSample]{values: make([]pingSample, 300)},
-		signal: historyRing[signalSample]{values: make([]signalSample, 60)},
+		ping:   pingHistory{historyRing: historyRing[compactPing]{values: make([]compactPing, 300)}},
+		signal: signalHistory{historyRing: historyRing[compactSignal]{values: make([]compactSignal, 60)}},
 	}
 	var config struct {
 		Target string `json:"target"`
@@ -196,7 +194,7 @@ func (m *telemetryMonitor) recordPing(generation uint64, sample pingSample) {
 		return
 	}
 	if m.ping.count > 0 && sample.RTT != nil {
-		prev := m.ping.values[(m.ping.next+len(m.ping.values)-1)%len(m.ping.values)]
+		prev := m.ping.values[(m.ping.next+len(m.ping.values)-1)%len(m.ping.values)].expand()
 		if prev.RTT != nil && sample.Time > prev.Time && sample.Time-prev.Time <= 1500 {
 			sample.Jitter = metric(math.Abs(*sample.RTT - *prev.RTT))
 		}
@@ -323,30 +321,20 @@ func (m *telemetryMonitor) setTarget(raw string) error {
 	if m.target == target {
 		return nil
 	}
-	if err := os.MkdirAll(filepath.Dir(m.configPath), 0700); err != nil {
-		return err
-	}
-	file, err := os.CreateTemp(filepath.Dir(m.configPath), ".monitor-*.json")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(file.Name())
-	err = json.NewEncoder(file).Encode(struct {
+	data, err := json.Marshal(struct {
 		Target string `json:"target"`
 	}{target})
-	if closeErr := file.Close(); err == nil {
-		err = closeErr
-	}
-	if err == nil {
-		err = os.Rename(file.Name(), m.configPath)
-	}
 	if err != nil {
-		return fmt.Errorf("save ping target: %w", err)
+		return err
+	}
+	err = writePersistentFile(m.configPath, append(data, '\n'), 0600)
+	if err != nil && !persistenceCommitted(err) {
+		return err
 	}
 	m.target = target
 	m.generation++
-	m.ping = historyRing[pingSample]{values: make([]pingSample, 300)}
-	return nil
+	m.ping.next, m.ping.count, m.ping.lastIP = 0, 0, ""
+	return err
 }
 
 func (s *simpleAdminServer) handleTelemetry(w http.ResponseWriter, r *http.Request) {

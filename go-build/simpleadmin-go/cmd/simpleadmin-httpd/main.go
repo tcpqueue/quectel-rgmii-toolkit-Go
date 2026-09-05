@@ -77,6 +77,20 @@ type languageConfig struct {
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	if len(os.Args) > 1 && os.Args[1] == "passwd" {
+		data, err := io.ReadAll(io.LimitReader(os.Stdin, 131))
+		if err == nil {
+			err = writeAuthConfig(defaultAuthFile, authConfig{Username: "admin", Password: strings.TrimSuffix(strings.TrimSuffix(string(data), "\n"), "\r")})
+		}
+		if err != nil {
+			if persistenceCommitted(err) {
+				log.Print(err)
+				os.Exit(2)
+			}
+			log.Fatal(err)
+		}
+		return
+	}
 
 	if len(os.Args) > 1 && os.Args[1] == "__smd-reader" {
 		runSMDReaderCommand(os.Args[2:])
@@ -116,6 +130,7 @@ func runServeCommand(args []string) {
 	fs.BoolVar(&cfg.mockMode, "mock", false, "启用本地测试 mock 模式，不访问真实串口、systemd 或 TTL 规则")
 	fs.BoolVar(&cfg.atDebug, "at-debug", envBool("SIMPLEADMIN_AT_DEBUG"), "启用 AT 详细调试日志")
 	_ = fs.Parse(args)
+	persistenceMock = cfg.mockMode
 
 	runtimeTTLValueFile = cfg.ttlFile
 	atDebugEnabled = cfg.atDebug
@@ -510,10 +525,7 @@ func ensureAuthFile(path string) error {
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return err
-	}
-	return os.WriteFile(path, []byte("admin:admin\n"), 0600)
+	return writePersistentFile(path, []byte("admin:admin\n"), 0600)
 }
 
 func loadAuthConfig(path string) (authConfig, error) {
@@ -542,29 +554,7 @@ func writeAuthConfig(path string, auth authConfig) error {
 	if err := validateNewPassword(auth.Password); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return err
-	}
-
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".simpleadmin.auth.*")
-	if err != nil {
-		return err
-	}
-	tmpName := tmp.Name()
-	defer os.Remove(tmpName)
-
-	if _, err := fmt.Fprintf(tmp, "%s:%s\n", auth.Username, auth.Password); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Chmod(0600); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmpName, path)
+	return writePersistentFile(path, []byte(fmt.Sprintf("%s:%s\n", auth.Username, auth.Password)), 0600)
 }
 
 func validateNewPassword(password string) error {
@@ -596,13 +586,6 @@ func ensureLocalCACertificate(certPath, keyPath string) (*x509.Certificate, *rsa
 		return cert, key, nil
 	}
 
-	if err := os.MkdirAll(filepath.Dir(certPath), 0755); err != nil {
-		return nil, nil, err
-	}
-	if err := os.MkdirAll(filepath.Dir(keyPath), 0755); err != nil {
-		return nil, nil, err
-	}
-
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return nil, nil, err
@@ -630,10 +613,7 @@ func ensureLocalCACertificate(certPath, keyPath string) (*x509.Certificate, *rsa
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := writeCertificatePEM(certPath, certDER); err != nil {
-		return nil, nil, err
-	}
-	if err := writeRSAPrivateKeyPEM(keyPath, privateKey); err != nil {
+	if err := writeCertificatePair(certPath, keyPath, certDER, privateKey); err != nil {
 		return nil, nil, err
 	}
 
@@ -685,13 +665,6 @@ func serverCertificateMatches(certPath, keyPath string, caCert *x509.Certificate
 }
 
 func writeServerCertificate(certPath, keyPath string, caCert *x509.Certificate, caKey *rsa.PrivateKey) error {
-	if err := os.MkdirAll(filepath.Dir(certPath), 0755); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(keyPath), 0755); err != nil {
-		return err
-	}
-
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return err
@@ -720,10 +693,7 @@ func writeServerCertificate(certPath, keyPath string, caCert *x509.Certificate, 
 	if err != nil {
 		return err
 	}
-	if err := writeCertificatePEM(certPath, certDER); err != nil {
-		return err
-	}
-	return writeRSAPrivateKeyPEM(keyPath, privateKey)
+	return writeCertificatePair(certPath, keyPath, certDER, privateKey)
 }
 
 func requiredTLSCertificateDNSNames() []string {
@@ -815,29 +785,12 @@ func loadRSAPrivateKey(path string) (*rsa.PrivateKey, error) {
 	return x509.ParsePKCS1PrivateKey(block.Bytes)
 }
 
-func writeCertificatePEM(path string, certDER []byte) error {
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
-	if err != nil {
-		return err
-	}
-	if err := pem.Encode(file, &pem.Block{Type: "CERTIFICATE", Bytes: certDER}); err != nil {
-		_ = file.Close()
-		return err
-	}
-	return file.Close()
-}
-
-func writeRSAPrivateKeyPEM(path string, privateKey *rsa.PrivateKey) error {
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
-	if err != nil {
-		return err
-	}
+func writeCertificatePair(certPath, keyPath string, certDER []byte, privateKey *rsa.PrivateKey) error {
 	keyBytes := x509.MarshalPKCS1PrivateKey(privateKey)
-	if err := pem.Encode(file, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: keyBytes}); err != nil {
-		_ = file.Close()
-		return err
-	}
-	return file.Close()
+	return persistentSettings.write(
+		persistentFile{certPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER}), 0644},
+		persistentFile{keyPath, pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: keyBytes}), 0600},
+	)
 }
 
 func (s *simpleAdminServer) languageConfigPath() string {
@@ -876,15 +829,12 @@ func writeLanguageConfig(path, language string) error {
 	if language == "" {
 		return fmt.Errorf("unsupported language: %s", language)
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return err
-	}
 	data, err := json.MarshalIndent(languageConfig{Language: language}, "", "  ")
 	if err != nil {
 		return err
 	}
 	data = append(data, '\n')
-	return os.WriteFile(path, data, 0644)
+	return writePersistentFile(path, data, 0644)
 }
 
 func (s *simpleAdminServer) handleGetATCommand(w http.ResponseWriter, r *http.Request) {
@@ -1004,6 +954,11 @@ func (s *simpleAdminServer) handleSetPassword(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if err := writeAuthConfig(s.cfg.authFile, authConfig{Username: auth.Username, Password: newPassword}); err != nil {
+		if persistenceCommitted(err) {
+			current, _ := r.Context().Value(apiConnectionContextKey{}).(net.Conn)
+			s.revokeAllSessions(current)
+			clearSessionCookie(w, r)
+		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}

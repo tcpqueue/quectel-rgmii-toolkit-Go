@@ -181,7 +181,7 @@ Simple_Admin_GO/
 - `/etc/init.post_boot.sh` 中的 SimpleAdmin 标记块，仅当 systemd 不可用或服务无法 active 时。
 - 默认安装会启用 bridge0 MAC 固定流程，优先使用 `/usrdata/etc/data/mobileap_cfg.xml`，不存在时兜底 `/etc/data/mobileap_cfg.xml`；脚本先检查 `APMACAddress`，存在时只写 `APMACAddress`，没有 `APMACAddress` 时才检查 `EarlyEthMode` 和 `EarlyEthMACAddr`，两者都存在时写入 `EarlyEthMode=1` 和目标 `EarlyEthMACAddr`；都不存在时不修改配置并提示，同时写入 `/usrdata/simpleadmin/bridge0_mac`。
 - 如需跳过 QCMAP `mobileap_cfg.xml` 修改，可在执行安装脚本前明确设置 `SIMPLEADMIN_FIX_BRIDGE0_MAC=0`。
-- `/tmp/simpleadmin-httpd.log`、`/tmp/simpleadmin-postboot.log` 等运行日志。
+- 后台模式默认不写运行日志。fallback PID 仅在 `/tmp` 为 tmpfs 时保存到 `/tmp/simpleadmin-httpd.pid`。
 
 安装过程不会清理 `port_bridge`，不会主动触碰 `/dev/smd7`，不会删除旧版 Lighttpd/CGI/simpleupdates/simplefirewall 目录；只会在启动 SimpleAdmin 前停止使用 `/data/lighttpd.conf` 的原厂 lighttpd 运行进程来释放 80 端口。
 
@@ -863,7 +863,7 @@ simpleadmin-httpd 启动
   -> fallback 模式下开机后 post_boot 延迟 3 秒调用 /usrdata/simpleadmin/start_simpleadmin.sh
   -> start_simpleadmin.sh 先调用 prepare_simpleadmin_ports.sh 释放 80 端口
   -> start_simpleadmin.sh 放行 TCP 80 并执行 nohup /usrdata/simpleadmin/simpleadmin-httpd -http :80 -static /usrdata/simpleadmin/www ...
-  -> 日志写入 /tmp/simpleadmin-httpd.log 和 /tmp/simpleadmin-postboot.log
+  -> 标准输出和错误输出重定向至 /dev/null，不持续写日志
   -> 只监听 HTTP 80 端口
   -> 浏览器访问 http://设备IP/
   -> 显示 login.html 页面登录
@@ -1019,10 +1019,11 @@ uninstall.bat
 systemctl status simpleadmin-httpd.service --no-pager
 journalctl -u simpleadmin-httpd.service -n 150 --no-pager
 ps | grep '[s]impleadmin-httpd'
-cat /tmp/simpleadmin-httpd.log
 ```
 
 ### 模块端测试 AT
+
+后台默认不保存应用日志，`journalctl` 仅用于检查 systemd 的服务生命周期信息。需要诊断应用错误时，先停止后台服务，再从终端前台运行相同的启动命令；AT 详细日志按需使用 `--debug`，不要长期重定向到闪存文件。
 
 ```sh
 /usrdata/simpleadmin/simpleadmin-httpd at --debug --devices /dev/smd11 --timeout-ms 1000 ATI
@@ -1097,6 +1098,16 @@ npm run build
 ```
 
 构建源文件及锁文件位于 `web-assets/`，产物为 `development/simpleadmin/www/js/monitor-vendor.js`。Art Design Pro、ECharts 和 Lucide 的许可文件保留在 `development/simpleadmin/www/licenses/`。Go 模块最低版本为 1.23，发布构建使用 Go 1.26.3。
+
+### 持久化与闪存写入
+
+密码、语言、TTL、Ping 目标及 TLS 证书均通过统一保存入口写入。模块端执行 `mount -o remount,rw /` 后，写入同目录临时文件、同步文件、原子替换目标并同步目录，最后执行 `mount -o remount,ro /`。写入或挂载失败会返回错误，失败路径仍尝试恢复只读。证书与私钥在同一读写窗口内保存，但两个文件不具备整体断电原子性。
+
+保存按进程内互斥锁及 tmpfs 上的跨进程锁串行执行；文件内容未变化时不重写、不切换挂载。锁要求 `/run` 或 `/tmp` 是 tmpfs，无可用内存文件系统时拒绝设备配置写入。设备服务设置 `SIMPLEADMIN_MANAGE_ROOTFS=1`；手动运行时检测 `/dev/smd11` 字符设备以启用此行为。Windows 和 `-mock` 不操作系统挂载，维护脚本已经负责挂载时可显式设置 `SIMPLEADMIN_MANAGE_ROOTFS=0`。
+
+五分钟历史缓冲使用固定精度的紧凑数值：300 个 Ping 点与 60 个信号/温度点的数组合计 6240 字节（约 6.1 KiB），保留 0.1 精度及缺测标记。这是历史数组大小，不是整个 Go 进程内存；HTTP 快照、JSON、连接及第三方 Ping 库另有临时开销。IP 仅保留最新值，历史不包含重复 IP 字符串，不写日志、数据库或缓存文件。
+
+应用不通过定时落盘保存会话或监控，也不周期性执行全局 `sync`。系统服务和后台启动默认丢弃应用日志，PID 仅放在确认的 tmpfs 中。操作系统自身的日志、交换分区及模块固件写入不由本程序管理。
 
 ## 1. 后续代码修改方法
 
