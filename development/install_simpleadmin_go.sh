@@ -12,13 +12,13 @@ SYSTEMD_UNIT="simpleadmin-httpd.service"
 SYSTEMD_DIR=""
 WANTS_DIR=""
 SERVICE_UNIT_INSTALLED="0"
-FALLBACK_PID_FILE="$SIMPLEADMIN_DIR/simpleadmin-httpd.pid"
+FALLBACK_PID_FILE="/tmp/simpleadmin-httpd.pid"
 FALLBACK_START_SCRIPT="$SIMPLEADMIN_DIR/start_simpleadmin.sh"
 FALLBACK_STOP_SCRIPT="$SIMPLEADMIN_DIR/stop_simpleadmin.sh"
 PORT_PREPARE_SCRIPT="$SIMPLEADMIN_DIR/prepare_simpleadmin_ports.sh"
-FALLBACK_LOG_FILE="/tmp/simpleadmin-httpd.log"
+FALLBACK_LOG_FILE="/dev/null"
 POST_BOOT_FILE="/etc/init.post_boot.sh"
-POST_BOOT_LOG_FILE="/tmp/simpleadmin-postboot.log"
+POST_BOOT_LOG_FILE="/dev/null"
 REBOOT_MARKER_FILE="/tmp/simpleadmin-reboot-required"
 INSTALL_RESULT_FILE="/tmp/simpleadmin-install-result.env"
 POST_BOOT_BEGIN="# BEGIN SIMPLEADMIN GO AUTOSTART"
@@ -64,11 +64,15 @@ fail() {
 }
 
 remount_rw() {
-    mount -o remount,rw / >/dev/null 2>&1 || true
+    mount -o remount,rw / || fail "根目录切换为读写失败"
+    trap 'mount -o remount,ro / || echo "[错误] 根目录恢复只读失败" >&2' EXIT
+    trap 'exit 1' INT TERM
 }
 
 remount_ro() {
-    mount -o remount,ro / >/dev/null 2>&1 || true
+    sync
+    mount -o remount,ro / || fail "根目录恢复只读失败"
+    trap - EXIT INT TERM
 }
 
 require_file() {
@@ -310,7 +314,7 @@ install_simpleadmin_files() {
     mkdir -p "$SIMPLEADMIN_DIR/systemd"
 
     cp -f "$SIMPLEADMIN_SRC/simpleadmin-httpd.armv7" "$SIMPLEADMIN_DIR/simpleadmin-httpd"
-    chmod +x "$SIMPLEADMIN_DIR/simpleadmin-httpd"
+    chmod 777 "$SIMPLEADMIN_DIR" "$SIMPLEADMIN_DIR/simpleadmin-httpd"
 
     cp -rf "$SIMPLEADMIN_SRC/www" "$SIMPLEADMIN_DIR/www"
 
@@ -454,10 +458,17 @@ EOF
     cat > "$FALLBACK_START_SCRIPT" <<'EOF'
 #!/bin/sh
 SIMPLEADMIN_DIR="/usrdata/simpleadmin"
-PID_FILE="$SIMPLEADMIN_DIR/simpleadmin-httpd.pid"
-LOG_FILE="/tmp/simpleadmin-httpd.log"
+PID_FILE="/tmp/simpleadmin-httpd.pid"
+LOG_FILE="/dev/null"
+export SIMPLEADMIN_MANAGE_ROOTFS=1
 BIN="$SIMPLEADMIN_DIR/simpleadmin-httpd"
 PORT_PREPARE_SCRIPT="$SIMPLEADMIN_DIR/prepare_simpleadmin_ports.sh"
+
+save_runtime_pid() {
+    if [ "$(stat -f -c %T /tmp 2>/dev/null)" = "tmpfs" ]; then
+        printf '%s\n' "$1" > "$PID_FILE"
+    fi
+}
 
 open_simpleadmin_port() {
     if command -v iptables >/dev/null 2>&1; then
@@ -499,7 +510,7 @@ if [ -z "$RUNNING_PID" ]; then
     RUNNING_PID="$(ps 2>/dev/null | grep '[s]impleadmin-httpd' | awk '{print $1; exit}' || true)"
 fi
 if [ -n "$RUNNING_PID" ]; then
-    echo "$RUNNING_PID" > "$PID_FILE"
+    save_runtime_pid "$RUNNING_PID"
     echo "[OK] simpleadmin-httpd already running: $RUNNING_PID"
     exit 0
 fi
@@ -611,23 +622,22 @@ nohup "$BIN" \
     -auth-file "$SIMPLEADMIN_DIR/simpleadmin.auth" \
     -at-devices-file "$SIMPLEADMIN_DIR/at_devices.conf" \
     >> "$LOG_FILE" 2>&1 &
-echo $! > "$PID_FILE"
+PID=$!
+save_runtime_pid "$PID"
 sleep 1
-PID="$(cat "$PID_FILE" 2>/dev/null || true)"
 if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
     echo "[OK] simpleadmin-httpd started by nohup: $PID"
     exit 0
 fi
 
-echo "[错误] simpleadmin-httpd 后台启动失败，日志如下:" >&2
-cat "$LOG_FILE" >&2 2>/dev/null || true
+echo "[错误] simpleadmin-httpd 后台启动失败，可在终端前台运行程序查看错误。" >&2
 exit 1
 EOF
 
     cat > "$FALLBACK_STOP_SCRIPT" <<'EOF'
 #!/bin/sh
 SIMPLEADMIN_DIR="/usrdata/simpleadmin"
-PID_FILE="$SIMPLEADMIN_DIR/simpleadmin-httpd.pid"
+PID_FILE="/tmp/simpleadmin-httpd.pid"
 
 if [ -f "$PID_FILE" ]; then
     PID="$(cat "$PID_FILE" 2>/dev/null || true)"
@@ -750,6 +760,7 @@ main() {
     install_simpleadmin_files
     install_at_device_config
     install_ttl_state
+    SIMPLEADMIN_MANAGE_ROOTFS=0 "$SIMPLEADMIN_DIR/simpleadmin-httpd" root-password-init || fail "初始化系统 root 密码失败"
     maybe_install_bridge0_mac_config
     restart_services
     remount_ro

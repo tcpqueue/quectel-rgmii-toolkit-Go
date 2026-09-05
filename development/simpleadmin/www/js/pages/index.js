@@ -80,6 +80,13 @@ function getStaticNetworkInfo() {
     _dashboardActive: false,
     _dashboardPageChangeHandler: null,
 
+    hasRadioSignal(radio) {
+      return ['rsrp', 'rsrq', 'sinr'].some(key => {
+        const value = this[key + radio];
+        return value !== null && value !== undefined && String(value).trim() !== '' && Number.isFinite(Number(value));
+      });
+    },
+
     toggleNetworkCompact() {
       this.compactNetworkInfo = !this.compactNetworkInfo;
       saveNetworkCompactState(this.compactNetworkInfo);
@@ -315,7 +322,7 @@ function getStaticNetworkInfo() {
         const label = unitMap[unit] || unit;
         return `${amount} ${label}${amount === 1 ? '' : 's'}`;
       }
-      return `${amount} ${unit}`;
+      return `${amount} ${this.t(unit)}`;
     },
 
     formatUptimeParts(parts) {

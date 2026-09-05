@@ -77,6 +77,33 @@ type languageConfig struct {
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	if len(os.Args) > 1 && os.Args[1] == "root-password-init" {
+		marker := filepath.Join(filepath.Dir(defaultAuthFile), "root-password.initialized")
+		if _, err := os.Stat(marker); err == nil {
+			return
+		}
+		if err := changeSystemRootPassword("", "admin", true); err != nil {
+			log.Fatal(err)
+		}
+		if err := writePersistentFile(marker, []byte("1\n"), 0600); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+	if len(os.Args) > 1 && os.Args[1] == "passwd" {
+		data, err := io.ReadAll(io.LimitReader(os.Stdin, 131))
+		if err == nil {
+			err = writeAuthConfig(defaultAuthFile, authConfig{Username: "admin", Password: strings.TrimSuffix(strings.TrimSuffix(string(data), "\n"), "\r")})
+		}
+		if err != nil {
+			if persistenceCommitted(err) {
+				log.Print(err)
+				os.Exit(2)
+			}
+			log.Fatal(err)
+		}
+		return
+	}
 
 	if len(os.Args) > 1 && os.Args[1] == "__smd-reader" {
 		runSMDReaderCommand(os.Args[2:])
@@ -116,6 +143,7 @@ func runServeCommand(args []string) {
 	fs.BoolVar(&cfg.mockMode, "mock", false, "启用本地测试 mock 模式，不访问真实串口、systemd 或 TTL 规则")
 	fs.BoolVar(&cfg.atDebug, "at-debug", envBool("SIMPLEADMIN_AT_DEBUG"), "启用 AT 详细调试日志")
 	_ = fs.Parse(args)
+	persistenceMock = cfg.mockMode
 
 	runtimeTTLValueFile = cfg.ttlFile
 	atDebugEnabled = cfg.atDebug
@@ -147,11 +175,16 @@ func runServeCommand(args []string) {
 	atCommandCache.Start(cfg.mockMode)
 
 	app := &simpleAdminServer{cfg: cfg}
+	cleanupContext, stopCleanup := context.WithCancel(context.Background())
+	defer stopCleanup()
+	go app.cleanupSessions(cleanupContext)
+	app.telemetry = newTelemetryMonitor(filepath.Join(filepath.Dir(cfg.authFile), "monitor.json"), cfg.mockMode)
+	app.telemetry.start(cleanupContext)
 	handler := app.routes()
 
 	if cfg.noTLS {
 		log.Printf("ZBIMS HTTP 服务启动: %s", cfg.httpAddr)
-		log.Fatal(http.ListenAndServe(cfg.httpAddr, handler))
+		log.Fatal(newHTTPServer(cfg.httpAddr, handler).ListenAndServe())
 		return
 	}
 
@@ -169,19 +202,23 @@ func runServeCommand(args []string) {
 			http.Redirect(w, r, target, http.StatusMovedPermanently)
 		})
 		log.Printf("HTTP 重定向服务启动: %s", cfg.httpAddr)
-		if err := http.ListenAndServe(cfg.httpAddr, redirectHandler); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := newHTTPServer(cfg.httpAddr, redirectHandler).ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Printf("HTTP 重定向服务退出: %v", err)
 		}
 	}()
 
 	log.Printf("ZBIMS HTTPS 服务启动: %s", cfg.httpsAddr)
-	log.Fatal(http.ListenAndServeTLS(cfg.httpsAddr, cfg.certFile, cfg.keyFile, handler))
+	log.Fatal(newHTTPServer(cfg.httpsAddr, handler).ListenAndServeTLS(cfg.certFile, cfg.keyFile))
 }
 
 type simpleAdminServer struct {
-	cfg       serverConfig
-	sessionMu sync.Mutex
-	sessions  map[string]time.Time
+	cfg                serverConfig
+	authMu             sync.Mutex
+	sessionMu          sync.Mutex
+	sessions           map[string]time.Time
+	sessionConnections map[net.Conn]string
+	telemetry          *telemetryMonitor
+	mockRootPassword   string
 
 	modelMu           sync.RWMutex
 	cachedModuleModel string
@@ -191,6 +228,10 @@ func (s *simpleAdminServer) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/login", s.handleLogin)
 	mux.HandleFunc("/api/logout", s.handleLogout)
+	mux.HandleFunc("/api/set_password", s.handleSetPassword)
+	mux.HandleFunc("/api/set_root_password", s.handleSetRootPassword)
+	mux.HandleFunc("/api/telemetry", s.handleTelemetry)
+	mux.HandleFunc("/api/telemetry/target", s.handleTelemetryTarget)
 	mux.HandleFunc("/api/module_model", s.handleModuleModel)
 	mux.HandleFunc("/login.html", s.handleLoginPage)
 	mux.HandleFunc("/logout.html", s.handleLogoutPage)
@@ -206,6 +247,8 @@ func (s *simpleAdminServer) routes() http.Handler {
 
 func (s *simpleAdminServer) nativeAPIHandlers() map[string]http.HandlerFunc {
 	return map[string]http.HandlerFunc{
+		"/api/telemetry":        s.handleTelemetry,
+		"/api/telemetry/target": s.handleTelemetryTarget,
 		"/api/get_atcache":      s.handleGetATCache,
 		"/api/get_atcommand":    s.handleGetATCommand,
 		"/api/user_atcommand":   s.handleGetATCommand,
@@ -294,7 +337,7 @@ func (s *simpleAdminServer) sessionAuth(next http.Handler) http.Handler {
 
 func isPublicAuthPath(path string) bool {
 	switch path {
-	case "/login.html", "/logout.html", "/api/login", "/api/logout", "/api/module_model":
+	case "/login.html", "/logout.html", "/js/locales.js", "/api/login", "/api/logout", "/api/module_model":
 		return true
 	default:
 		return false
@@ -319,13 +362,16 @@ func (s *simpleAdminServer) handleLogin(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"ok": false, "error": "method not allowed"})
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 4096)
+	if err := r.ParseForm(); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "error": "invalid form"})
+		return
+	}
+	s.authMu.Lock()
+	defer s.authMu.Unlock()
 	auth, err := loadAuthConfig(s.cfg.authFile)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"ok": false, "error": "auth config error"})
-		return
-	}
-	if err := r.ParseForm(); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "error": "invalid form"})
 		return
 	}
 	username := r.FormValue("username")
@@ -390,8 +436,19 @@ func (s *simpleAdminServer) createSession(expiresAt time.Time) (string, error) {
 	}
 	token := hex.EncodeToString(buf)
 	s.sessionMu.Lock()
+	s.pruneSessionsLocked(time.Now())
 	if s.sessions == nil {
 		s.sessions = make(map[string]time.Time)
+	}
+	if len(s.sessions) >= maxSessions {
+		var oldestToken string
+		var oldestExpiry time.Time
+		for existing, expiry := range s.sessions {
+			if oldestToken == "" || expiry.Before(oldestExpiry) {
+				oldestToken, oldestExpiry = existing, expiry
+			}
+		}
+		s.revokeSessionLocked(oldestToken, nil)
 	}
 	s.sessions[token] = expiresAt
 	s.sessionMu.Unlock()
@@ -410,7 +467,7 @@ func (s *simpleAdminServer) validateSession(token string) bool {
 		return false
 	}
 	if !expiresAt.After(now) {
-		delete(s.sessions, token)
+		s.revokeSessionLocked(token, nil)
 		return false
 	}
 	s.sessions[token] = now.Add(sessionDuration)
@@ -423,9 +480,7 @@ func (s *simpleAdminServer) destroyRequestSession(r *http.Request) {
 		return
 	}
 	s.sessionMu.Lock()
-	if s.sessions != nil {
-		delete(s.sessions, cookie.Value)
-	}
+	s.revokeSessionLocked(cookie.Value, nil)
 	s.sessionMu.Unlock()
 }
 
@@ -485,10 +540,7 @@ func ensureAuthFile(path string) error {
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return err
-	}
-	return os.WriteFile(path, []byte("admin:admin\n"), 0600)
+	return writePersistentFile(path, []byte("admin:admin\n"), 0600)
 }
 
 func loadAuthConfig(path string) (authConfig, error) {
@@ -517,29 +569,7 @@ func writeAuthConfig(path string, auth authConfig) error {
 	if err := validateNewPassword(auth.Password); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return err
-	}
-
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".simpleadmin.auth.*")
-	if err != nil {
-		return err
-	}
-	tmpName := tmp.Name()
-	defer os.Remove(tmpName)
-
-	if _, err := fmt.Fprintf(tmp, "%s:%s\n", auth.Username, auth.Password); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Chmod(0600); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmpName, path)
+	return writePersistentFile(path, []byte(fmt.Sprintf("%s:%s\n", auth.Username, auth.Password)), 0600)
 }
 
 func validateNewPassword(password string) error {
@@ -571,13 +601,6 @@ func ensureLocalCACertificate(certPath, keyPath string) (*x509.Certificate, *rsa
 		return cert, key, nil
 	}
 
-	if err := os.MkdirAll(filepath.Dir(certPath), 0755); err != nil {
-		return nil, nil, err
-	}
-	if err := os.MkdirAll(filepath.Dir(keyPath), 0755); err != nil {
-		return nil, nil, err
-	}
-
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return nil, nil, err
@@ -605,10 +628,7 @@ func ensureLocalCACertificate(certPath, keyPath string) (*x509.Certificate, *rsa
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := writeCertificatePEM(certPath, certDER); err != nil {
-		return nil, nil, err
-	}
-	if err := writeRSAPrivateKeyPEM(keyPath, privateKey); err != nil {
+	if err := writeCertificatePair(certPath, keyPath, certDER, privateKey); err != nil {
 		return nil, nil, err
 	}
 
@@ -660,13 +680,6 @@ func serverCertificateMatches(certPath, keyPath string, caCert *x509.Certificate
 }
 
 func writeServerCertificate(certPath, keyPath string, caCert *x509.Certificate, caKey *rsa.PrivateKey) error {
-	if err := os.MkdirAll(filepath.Dir(certPath), 0755); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(keyPath), 0755); err != nil {
-		return err
-	}
-
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return err
@@ -695,10 +708,7 @@ func writeServerCertificate(certPath, keyPath string, caCert *x509.Certificate, 
 	if err != nil {
 		return err
 	}
-	if err := writeCertificatePEM(certPath, certDER); err != nil {
-		return err
-	}
-	return writeRSAPrivateKeyPEM(keyPath, privateKey)
+	return writeCertificatePair(certPath, keyPath, certDER, privateKey)
 }
 
 func requiredTLSCertificateDNSNames() []string {
@@ -790,29 +800,12 @@ func loadRSAPrivateKey(path string) (*rsa.PrivateKey, error) {
 	return x509.ParsePKCS1PrivateKey(block.Bytes)
 }
 
-func writeCertificatePEM(path string, certDER []byte) error {
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
-	if err != nil {
-		return err
-	}
-	if err := pem.Encode(file, &pem.Block{Type: "CERTIFICATE", Bytes: certDER}); err != nil {
-		_ = file.Close()
-		return err
-	}
-	return file.Close()
-}
-
-func writeRSAPrivateKeyPEM(path string, privateKey *rsa.PrivateKey) error {
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
-	if err != nil {
-		return err
-	}
+func writeCertificatePair(certPath, keyPath string, certDER []byte, privateKey *rsa.PrivateKey) error {
 	keyBytes := x509.MarshalPKCS1PrivateKey(privateKey)
-	if err := pem.Encode(file, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: keyBytes}); err != nil {
-		_ = file.Close()
-		return err
-	}
-	return file.Close()
+	return persistentSettings.write(
+		persistentFile{certPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER}), 0644},
+		persistentFile{keyPath, pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: keyBytes}), 0600},
+	)
 }
 
 func (s *simpleAdminServer) languageConfigPath() string {
@@ -825,6 +818,10 @@ func normalizeLanguage(value string) string {
 		return "zh-CN"
 	case "en", "en-us", "english":
 		return "en"
+	case "ru", "ru-ru", "russian":
+		return "ru"
+	case "ar", "ar-sa", "arabic":
+		return "ar"
 	default:
 		return ""
 	}
@@ -851,15 +848,12 @@ func writeLanguageConfig(path, language string) error {
 	if language == "" {
 		return fmt.Errorf("unsupported language: %s", language)
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return err
-	}
 	data, err := json.MarshalIndent(languageConfig{Language: language}, "", "  ")
 	if err != nil {
 		return err
 	}
 	data = append(data, '\n')
-	return os.WriteFile(path, data, 0644)
+	return writePersistentFile(path, data, 0644)
 }
 
 func (s *simpleAdminServer) handleGetATCommand(w http.ResponseWriter, r *http.Request) {
@@ -936,6 +930,17 @@ func (s *simpleAdminServer) handleSetPassword(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	if r.Header.Get("Origin") != "" && !apiWebSocketOriginAllowed(r) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "origin forbidden"})
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 4096)
+	if err := r.ParseForm(); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid form"})
+		return
+	}
+	s.authMu.Lock()
+	defer s.authMu.Unlock()
 	auth, err := loadAuthConfig(s.cfg.authFile)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "auth config error"})
@@ -968,11 +973,21 @@ func (s *simpleAdminServer) handleSetPassword(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if err := writeAuthConfig(s.cfg.authFile, authConfig{Username: auth.Username, Password: newPassword}); err != nil {
+		if persistenceCommitted(err) {
+			current, _ := r.Context().Value(apiConnectionContextKey{}).(net.Conn)
+			s.revokeAllSessions(current)
+			clearSessionCookie(w, r)
+		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	// Keep the requesting WebSocket alive only long enough to deliver this response.
+	current, _ := r.Context().Value(apiConnectionContextKey{}).(net.Conn)
+	s.revokeAllSessions(current)
+	clearSessionCookie(w, r)
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "redirect": "/login.html"})
 }
 
 func (s *simpleAdminServer) handleGetTTLStatus(w http.ResponseWriter, r *http.Request) {

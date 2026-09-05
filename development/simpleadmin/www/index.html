@@ -38,11 +38,13 @@
 <link href="css/bootstrap.min.css" rel="stylesheet"/>
 <link href="css/Poppins.css?v=2.94" rel="stylesheet"/>
 <link href="css/styles.css?v=2.94" rel="stylesheet"/>
+<link href="css/art-device.css?v=3.3" rel="stylesheet"/>
 <link href="favicon.ico" rel="icon"/>
 <script src="js/band_map.js?v=2.94"></script>
 <script defer="" src="js/bootstrap.bundle.min.js"></script>
 <script src="js/vue.global.prod.js"></script>
-<script src="js/simpleadmin-core.js?v=2.94"></script>
+<script src="js/locales.js?v=3.3"></script>
+<script src="js/simpleadmin-core.js?v=3.3"></script>
 <script src="js/vue-app.js?v=2.94"></script>
 </head>
 <body>
@@ -54,36 +56,50 @@
 </div>
 <nav class="sa-menu">
 <a aria-current="page" class="sa-menu-link active" data-page-link="dashboard" href="#dashboard">
-<span class="sa-menu-dot"></span>
+<i data-lucide="layout-dashboard" aria-hidden="true"></i>
 <span data-simpleadmin-i18n-key="总览">总览</span>
 </a>
 <a class="sa-menu-link" data-page-link="network" href="#network">
-<span class="sa-menu-dot"></span>
+<i data-lucide="radio" aria-hidden="true"></i>
 <span data-simpleadmin-i18n-key="网络与小区">网络与小区</span>
 </a>
 <a class="sa-menu-link" data-page-link="settings" href="#settings">
-<span class="sa-menu-dot"></span>
+<i data-lucide="settings" aria-hidden="true"></i>
 <span data-simpleadmin-i18n-key="系统设置">系统设置</span>
 </a>
 <a class="sa-menu-link" data-page-link="sms" href="#sms">
-<span class="sa-menu-dot"></span>
+<i data-lucide="message-square" aria-hidden="true"></i>
 <span data-simpleadmin-i18n-key="短信服务">短信服务</span>
 </a>
 <a class="sa-menu-link" data-page-link="deviceinfo" href="#deviceinfo">
-<span class="sa-menu-dot"></span>
+<i data-lucide="info" aria-hidden="true"></i>
 <span data-simpleadmin-i18n-key="设备信息">设备信息</span>
 </a>
 <a class="sa-menu-link" data-page-link="console" href="#console">
-<span class="sa-menu-dot"></span>
+<i data-lucide="terminal" aria-hidden="true"></i>
 <span data-simpleadmin-i18n-key="控制台">控制台</span>
 </a>
 <a class="sa-menu-link" data-logout-link="1" href="/api/logout">
-<span class="sa-menu-dot"></span>
+<i data-lucide="log-out" aria-hidden="true"></i>
 <span data-simpleadmin-i18n-key="退出登录">退出登录</span>
 </a>
 </nav>
 </aside>
+<button aria-label="关闭菜单" class="art-backdrop" hidden id="artSidebarBackdrop" type="button"></button>
 <div class="sa-main">
+<header class="art-header">
+<div class="art-header-left">
+<button aria-label="展开或收起菜单" title="展开或收起菜单" class="art-icon-button" id="artMenuButton" type="button"><i data-lucide="menu" aria-hidden="true"></i></button>
+<button aria-label="刷新页面" title="刷新页面" class="art-icon-button" id="artRefreshButton" type="button"><i data-lucide="rotate-cw" aria-hidden="true"></i></button>
+<span class="art-breadcrumb">设备管理 <i data-lucide="chevron-right" aria-hidden="true"></i> <strong id="artCurrentPage">总览</strong></span>
+</div>
+<div class="art-header-right">
+<button aria-label="切换明暗主题" title="切换明暗主题" class="art-icon-button" id="artThemeButton" type="button"><i data-lucide="moon" aria-hidden="true"></i></button>
+<button aria-label="全屏" title="全屏" class="art-icon-button" id="artFullscreenButton" type="button"><i data-lucide="maximize" aria-hidden="true"></i></button>
+<select id="headerLanguage" class="art-language" aria-label="语言" data-no-i18n dir="ltr"><option value="zh-CN">中文</option><option value="en">English</option><option value="ru">Русский</option><option value="ar">العربية</option></select>
+<a class="art-account" data-page-link="settings" href="#settings" title="账户设置"><span class="art-avatar">A</span><span>管理员</span></a>
+</div>
+</header>
 <main class="sa-content">
 <section aria-labelledby="page-title-dashboard" class="sa-page active" data-page="dashboard" id="page-dashboard">
 <div class="sa-page-titlebar">
@@ -95,236 +111,85 @@
 <button class="btn btn-outline-secondary btn-sm sa-titlebar-theme-toggle" data-simpleadmin-i18n-key="暗夜模式" type="button">暗夜模式</button>
 </div>
 </div>
-<div class="sa-page-app sa-single-column" id="dashboardApp" v-cloak="">
-<div class="sa-section-stack sa-metric-grid">
-<div class="sa-stack-item">
-<div class="sa-panel sa-metric-panel sa-gauge-panel">
-<div class="sa-panel-body sa-gauge-card-body">
-<div aria-label="CPU 使用率" aria-valuemax="100" aria-valuemin="0" :aria-valuenow="clampPercent(cpuUsagePercent)" class="sa-gauge" role="progressbar">
-<svg aria-hidden="true" class="sa-gauge-svg" viewbox="0 0 200 130" xmlns="http://www.w3.org/2000/svg">
-<path class="sa-gauge-track" d="M 24 125 A 80 80 0 1 1 176 125"></path>
-<path :style="{ strokeDashoffset: gaugeDashOffset(cpuUsagePercent) }" class="sa-gauge-fill" d="M 24 125 A 80 80 0 1 1 176 125"></path>
-</svg>
-<div class="sa-gauge-center">
-<div class="sa-gauge-value" v-text="formatPercent(cpuUsagePercent)"></div>
-<div class="sa-gauge-label" data-simpleadmin-i18n-key="CPU">CPU</div>
+<div class="sa-page-app sa-single-column art-device-overview" id="dashboardApp" v-cloak="">
+<div class="art-overview-heading"><h2>设备状态</h2><span v-text="uptime"></span></div>
+<div class="art-health-grid">
+<article class="art-health-item"><div class="art-health-label"><span class="art-stat-icon blue"><i data-lucide="cpu" aria-hidden="true"></i></span><span>CPU 使用率</span></div><strong v-text="formatPercent(cpuUsagePercent)"></strong><div class="art-resource-track" role="progressbar" aria-label="CPU 使用率" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="clampPercent(cpuUsagePercent)"><span :style="{width: clampPercent(cpuUsagePercent) + '%'}"></span></div></article>
+<article class="art-health-item"><div class="art-health-label"><span class="art-stat-icon green"><i data-lucide="memory-stick" aria-hidden="true"></i></span><span>内存使用率</span></div><strong v-text="formatPercent(ramUsagePercent)"></strong><small v-text="formatRamUsage()"></small><div class="art-resource-track green" role="progressbar" aria-label="内存使用率" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="clampPercent(ramUsagePercent)"><span :style="{width: clampPercent(ramUsagePercent) + '%'}"></span></div></article>
+<article class="art-health-item"><div class="art-health-label"><span class="art-stat-icon amber"><i data-lucide="radio" aria-hidden="true"></i></span><span>信号质量</span></div><strong>{{ signalPercentage }}<small>%</small></strong><small v-text="signalAssessment"></small></article>
+<article class="art-health-item"><div class="art-health-label"><span class="art-stat-icon coral"><i data-lucide="wifi" aria-hidden="true"></i></span><span>互联网</span></div><strong class="art-connection-value" v-text="internetConnection"></strong><small v-text="network_mode"></small></article>
 </div>
+<div id="monitorSummary"></div>
+<section class="art-radio-readings" aria-labelledby="artRadioTitle">
+<div class="art-overview-heading"><h2 id="artRadioTitle">实时信号</h2><span v-text="bands"></span></div>
+<div class="art-radio-table" role="table" aria-label="4G 与 5G 实时信号">
+<div class="art-radio-row art-radio-labels" role="row"><span role="columnheader">制式</span><span role="columnheader">RSRP <small>dBm</small></span><span role="columnheader">RSRQ <small>dB</small></span><span role="columnheader">SINR <small>dB</small></span></div>
+<div class="art-radio-row" role="row" v-for="radio in ['LTE', 'NR'].filter(hasRadioSignal)" :key="radio"><span role="rowheader" class="art-radio-name"><span class="art-radio-dot" :class="{nr: radio === 'NR'}"></span>{{ radio === 'NR' ? '5G NR' : '4G LTE' }}</span><strong role="cell">{{ $data['rsrp' + radio] === '-' ? '--' : $data['rsrp' + radio] }}</strong><strong role="cell">{{ $data['rsrq' + radio] === '-' ? '--' : $data['rsrq' + radio] }}</strong><strong role="cell">{{ $data['sinr' + radio] === '-' ? '--' : $data['sinr' + radio] }}</strong></div>
 </div>
-<div class="sa-gauge-subtitle" data-simpleadmin-i18n-key="实时负载">实时负载</div>
+</section>
+<section class="art-network-section" aria-labelledby="artNetworkTitle">
+<div class="art-network-heading"><div><h2 id="artNetworkTitle">网络信息</h2><span v-text="network_provider"></span></div><div class="art-network-tools">
+<div class="art-segmented" role="group" aria-label="信息详略"><button type="button" :class="{active: compactNetworkInfo}" :aria-pressed="compactNetworkInfo" @click="!compactNetworkInfo && toggleNetworkCompact()">概览</button><button type="button" :class="{active: !compactNetworkInfo}" :aria-pressed="!compactNetworkInfo" @click="compactNetworkInfo && toggleNetworkCompact()">详情</button></div>
+<button :aria-label="sensitiveVisible ? '隐藏敏感信息' : '显示敏感信息'" :title="sensitiveVisible ? '隐藏敏感信息' : '显示敏感信息'" @click="toggleSensitiveVisible()" class="art-icon-button" type="button"><span v-show="!sensitiveVisible"><i data-lucide="eye-off" aria-hidden="true"></i></span><span v-show="sensitiveVisible"><i data-lucide="eye" aria-hidden="true"></i></span></button>
+</div></div>
+<div class="art-network-groups">
+<section class="art-detail-group"><h3><i data-lucide="radio" aria-hidden="true"></i>接入网络</h3><dl>
+<div><dt>激活 SIM</dt><dd v-text="formatActiveSimStatus()"></dd></div>
+<div><dt>运营商</dt><dd v-text="network_provider"></dd></div>
+<div v-if="!compactNetworkInfo"><dt>MCC / MNC</dt><dd v-text="mccmnc"></dd></div>
+<div><dt>APN</dt><dd v-text="apn"></dd></div>
+<div><dt>网络模式</dt><dd v-text="network_mode"></dd></div>
+<div><dt>频段</dt><dd v-text="bands"></dd></div>
+<div><dt>带宽</dt><dd v-text="bandwidth"></dd></div>
+</dl></section>
+<section class="art-detail-group"><h3><i data-lucide="activity" aria-hidden="true"></i>地址与流量</h3><dl>
+<div><dt>IPv4</dt><dd v-text="formatSensitiveValue(ipv4, 'ipv4')"></dd></div>
+<div><dt>IPv6</dt><dd v-text="formatSensitiveValue(ipv6, 'ipv6')"></dd></div>
+<div><dt>下载速率</dt><dd v-text="nr_dl_speed"></dd></div>
+<div><dt>上传速率</dt><dd v-text="nr_ul_speed"></dd></div>
+<div><dt>累计下载</dt><dd v-text="nr_rx_human"></dd></div>
+<div><dt>累计上传</dt><dd v-text="nr_tx_human"></dd></div>
+<div><dt>在线时长</dt><dd v-text="uptime"></dd></div>
+</dl></section>
+<section class="art-detail-group art-cell-details"><h3><i data-lucide="info" aria-hidden="true"></i>小区参数</h3><dl>
+<div><dt>PCI</dt><dd>{{ scc_pci !== '-' ? pcc_pci + ' / ' + scc_pci : pcc_pci }}</dd></div>
+<div><dt>E / ARFCN</dt><dd v-text="earfcns"></dd></div>
+<div v-if="!compactNetworkInfo"><dt>CELL ID</dt><dd v-text="formatSensitiveValue(cellID, 'id')"></dd></div>
+<div v-if="!compactNetworkInfo"><dt>eNB ID</dt><dd v-text="formatSensitiveValue(eNBID, 'id')"></dd></div>
+<div v-if="!compactNetworkInfo"><dt>TAC</dt><dd v-text="formatSensitiveValue(tac, 'id')"></dd></div>
+<div class="art-antenna-row"><dt>RSRP 天线 <small>dBm</small></dt><dd class="art-antenna-values"><span v-for="(value, index) in [prxqrsrp, drxqrsrp, rx2qrsrp, rx3qrsrp]" :key="index"><small>{{ ['PRX','DRX','RX2','RX3'][index] }}</small>{{ value === '-' ? '--' : value }}</span></dd></div>
+</dl></section>
 </div>
+<footer class="art-network-footer"><div class="art-update-label"><span></span>更新时间 <b v-text="lastUpdate"></b></div><div class="art-refresh-control"><label for="overviewRefresh">刷新间隔</label><input id="overviewRefresh" :placeholder="refreshRate" class="form-control" max="60" min="2" type="number" v-model="newRefreshRate" aria-label="刷新间隔（秒）"/><span>秒</span><button @click="updateRefreshRate()" class="art-icon-button" type="button" title="保存刷新间隔" aria-label="保存刷新间隔"><i data-lucide="check" aria-hidden="true"></i></button></div></footer>
+</section>
 </div>
+<div id="monitorApp" class="art-monitor" v-cloak>
+<div class="art-monitor-heading"><span class="art-live-state" :class="{ 'is-error': error || (latestPing && latestPing.status !== 'ok') }"><span></span>{{ error ? '读取失败' : statusLabel(latestPing ? latestPing.status : 'pending') }}</span><span class="art-sample-meta">最近 5 分钟</span><span v-if="snapshot.mock" class="art-mock-badge">模拟数据</span></div>
+<teleport to="#monitorSummary">
+<div class="art-stats">
+<article class="art-stat"><div><span>当前延迟</span><strong>{{ number(latestPing && latestPing.rtt) }} <small>ms</small></strong><p>{{ snapshot.target }}</p></div><span class="art-stat-icon blue"><i data-lucide="wifi" aria-hidden="true"></i></span></article>
+<article class="art-stat"><div><span>平均抖动</span><strong>{{ number(snapshot.summary.jitter) }} <small>ms</small></strong><p>相邻 RTT 绝对差</p></div><span class="art-stat-icon green"><i data-lucide="activity" aria-hidden="true"></i></span></article>
+<article class="art-stat"><div><span>丢包率</span><strong>{{ number(snapshot.summary.loss) }} <small>%</small></strong><p>{{ snapshot.summary.received || 0 }} / {{ snapshot.summary.sent || 0 }} 应答</p></div><span class="art-stat-icon amber"><i data-lucide="radio" aria-hidden="true"></i></span></article>
+<article class="art-stat"><div><span>模块温度</span><strong>{{ number(latestSignal && latestSignal.temperature) }} <small>°C</small></strong><p>{{ signalTime }}</p></div><span class="art-stat-icon coral"><i data-lucide="thermometer" aria-hidden="true"></i></span></article>
 </div>
-<div class="sa-stack-item">
-<div class="sa-panel sa-metric-panel sa-gauge-panel">
-<div class="sa-panel-body sa-gauge-card-body">
-<div aria-label="RAM 使用量" aria-valuemax="100" aria-valuemin="0" :aria-valuenow="clampPercent(ramUsagePercent)" class="sa-gauge" role="progressbar">
-<svg aria-hidden="true" class="sa-gauge-svg" viewbox="0 0 200 130" xmlns="http://www.w3.org/2000/svg">
-<path class="sa-gauge-track" d="M 24 125 A 80 80 0 1 1 176 125"></path>
-<path :style="{ strokeDashoffset: gaugeDashOffset(ramUsagePercent) }" class="sa-gauge-fill" d="M 24 125 A 80 80 0 1 1 176 125"></path>
-</svg>
-<div class="sa-gauge-center">
-<div class="sa-gauge-value" v-text="formatPercent(ramUsagePercent)"></div>
-<div class="sa-gauge-label" data-simpleadmin-i18n-key="RAM">RAM</div>
+</teleport>
+<div class="art-signal-layout">
+<section class="art-chart-section" aria-labelledby="signalChartTitle">
+<div class="art-section-heading"><div><h2 id="signalChartTitle">无线信号</h2><span>5 秒采样</span></div><span class="art-radio-mode-label" v-if="availableRadios.length === 1">{{ availableRadios[0] === 'NR' ? '5G NR' : '4G LTE' }}</span><div v-if="availableRadios.length > 1" class="art-segmented" role="group" aria-label="无线制式"><button :aria-pressed="radio === 'NR'" :class="{ active: radio === 'NR' }" @click="setRadio('NR')" type="button">5G NR</button><button :aria-pressed="radio === 'LTE'" :class="{ active: radio === 'LTE' }" @click="setRadio('LTE')" type="button">4G LTE</button></div></div>
+<div class="art-chart-wrap"><div id="signalChart" class="art-chart" role="img" :aria-label="radio + ' RSRP 和 SINR 最近五分钟走势图'"></div><div class="art-chart-empty" v-if="!hasSignal">等待 {{ radio }} 信号数据</div></div>
+</section>
+<section class="art-chart-section" aria-labelledby="temperatureChartTitle">
+<div class="art-section-heading"><div><h2 id="temperatureChartTitle">温度趋势</h2><span>°C · 5 秒采样</span></div><i data-lucide="thermometer" aria-hidden="true"></i></div>
+<div class="art-chart-wrap"><div id="temperatureChart" class="art-chart" role="img" aria-label="模块温度最近五分钟走势图"></div><div class="art-chart-empty" v-if="!hasTemperature">等待温度数据</div></div>
+</section>
 </div>
-</div>
-<div class="sa-gauge-subtitle" v-text="formatRamUsage()"></div>
-</div>
-</div>
-</div>
-<div class="sa-stack-item">
-<div class="sa-panel sa-metric-panel sa-signal-quality-panel">
-<div class="sa-panel-body">
-<div class="sa-signal-quality-list">
-<div class="sa-signal-quality-row">
-<span class="sa-signal-quality-label">RSRQ<sup>4G/5G</sup></span>
-<div class="sa-signal-quality-value">
-<div aria-label="RSRQ BAR" aria-valuemax="100" aria-valuemin="0" class="progress" role="progressbar" v-show="rsrqLTE != '-' || rsrqNR != '-'">
-<div :class="getProgressBarClass(rsrqLTEPercentage)" :style="'width: ' + rsrqLTEPercentage + '%'" v-show="rsrqLTE != '-' &amp;&amp; rsrqLTEPercentage != '0'">
-<span v-text="rsrqLTE + ' / ' + rsrqLTEPercentage + '%'"></span>
-</div>
-<div :class="getProgressBarClass(rsrqNRPercentage)" :style="'width: ' + rsrqNRPercentage + '%'" v-show="rsrqNR != '-' &amp;&amp; rsrqNRPercentage != '0'">
-<span v-text="rsrqNR + ' / ' + rsrqNRPercentage + '%'"></span>
-</div>
-</div>
-<span class="fst-italic" v-show="rsrqLTE == '-' &amp;&amp; rsrqNR == '-'">None</span>
-</div>
-</div>
-<div class="sa-signal-quality-row">
-<span class="sa-signal-quality-label">RSRP<sup>4G/5G</sup></span>
-<div class="sa-signal-quality-value">
-<div aria-label="RSRP BAR" aria-valuemax="100" aria-valuemin="0" class="progress" role="progressbar" v-show="rsrpLTE != '-' || rsrpNR != '-'">
-<div :class="getProgressBarClass(rsrpLTEPercentage)" :style="'width: ' + rsrpLTEPercentage + '%'" v-show="rsrpLTE != '-' &amp;&amp; rsrpLTEPercentage != '0'">
-<span v-text="rsrpLTE + ' / ' + rsrpLTEPercentage + '%'"></span>
-</div>
-<div :class="getProgressBarClass(rsrpNRPercentage)" :style="'width: ' + rsrpNRPercentage + '%'" v-show="rsrpNR != '-' &amp;&amp; rsrpNRPercentage != '0'">
-<span v-text="rsrpNR + ' / ' + rsrpNRPercentage + '%'"></span>
-</div>
-</div>
-<span class="fst-italic" v-show="rsrpLTE == '-' &amp;&amp; rsrpNR == '-'">None</span>
-</div>
-</div>
-<div class="sa-signal-quality-row">
-<span class="sa-signal-quality-label">SINR<sup>4G/5G</sup></span>
-<div class="sa-signal-quality-value">
-<div aria-label="SINR BAR" aria-valuemax="100" aria-valuemin="0" class="progress" role="progressbar" v-show="sinrLTE != '-' || sinrNR != '-'">
-<div :class="getProgressBarClass(sinrLTEPercentage)" :style="'width: ' + sinrLTEPercentage + '%'" v-show="sinrLTE != '-' &amp;&amp; sinrLTEPercentage != '0'">
-<span v-text="sinrLTE + ' / ' + sinrLTEPercentage + '%'"></span>
-</div>
-<div :class="getProgressBarClass(sinrNRPercentage)" :style="'width: ' + sinrNRPercentage + '%'" v-show="sinrNR != '-' &amp;&amp; sinrNRPercentage != '0'">
-<span v-text="sinrNR + ' / ' + sinrNRPercentage + '%'"></span>
-</div>
-</div>
-<span class="fst-italic" v-show="sinrLTE == '-' &amp;&amp; sinrNR == '-'">None</span>
-</div>
-</div>
-</div>
-</div>
-</div>
-</div>
-<div class="sa-stack-item sa-summary-metric-stack-item">
-<div class="sa-panel sa-metric-panel sa-summary-metric-panel">
-<div class="sa-panel-body sa-summary-metric-body">
-<div class="sa-summary-metric-list">
-<div class="sa-summary-metric-row">
-<svg aria-hidden="true" class="sa-summary-metric-icon" viewbox="0 0 320 512" xmlns="http://www.w3.org/2000/svg">
-<path d="M160 64c-26.5 0-48 21.5-48 48V276.5c0 17.3-7.1 31.9-15.3 42.5C86.2 332.6 80 349.5 80 368c0 44.2 35.8 80 80 80s80-35.8 80-80c0-18.5-6.2-35.4-16.7-48.9c-8.2-10.6-15.3-25.2-15.3-42.5V112c0-26.5-21.5-48-48-48zM48 112C48 50.2 98.1 0 160 0s112 50.1 112 112V276.5c0 .1 .1 .3 .2 .6c.2 .6 .8 1.6 1.7 2.8c18.9 24.4 30.1 55 30.1 88.1c0 79.5-64.5 144-144 144S16 447.5 16 368c0-33.2 11.2-63.8 30.1-88.1c.9-1.2 1.5-2.2 1.7-2.8c.1-.3 .2-.5 .2-.6V112zM208 368c0 26.5-21.5 48-48 48s-48-21.5-48-48c0-20.9 13.4-38.7 32-45.3V272c0-8.8 7.2-16 16-16s16 7.2 16 16v50.7c18.6 6.6 32 24.4 32 45.3z"></path>
-</svg>
-<div class="sa-summary-metric-value" v-text="temperature + ' °C'"></div>
-</div>
-<div class="sa-summary-metric-row">
-<svg aria-hidden="true" class="sa-summary-metric-icon" viewbox="0 0 640 512" xmlns="http://www.w3.org/2000/svg">
-<path d="M576 0c17.7 0 32 14.3 32 32V480c0 17.7-14.3 32-32 32s-32-14.3-32-32V32c0-17.7 14.3-32 32-32zM448 96c17.7 0 32 14.3 32 32V480c0 17.7-14.3 32-32 32s-32-14.3-32-32V128c0-17.7 14.3-32 32-32zM352 224V480c0 17.7-14.3 32-32 32s-32-14.3-32-32V224c0-17.7 14.3-32 32-32s32 14.3 32 32zM192 288c17.7 0 32 14.3 32 32V480c0 17.7-14.3 32-32 32s-32-14.3-32-32V320c0-17.7 14.3-32 32-32zM96 416v64c0 17.7-14.3 32-32 32s-32-14.3-32-32V416c0-17.7 14.3-32 32-32s32 14.3 32 32z"></path>
-</svg>
-<div class="sa-summary-metric-value" v-text="signalPercentage + '%'"></div>
-</div>
-<div class="sa-summary-metric-row">
-<svg aria-hidden="true" class="sa-summary-metric-icon" viewbox="0 0 640 512" xmlns="http://www.w3.org/2000/svg">
-<path d="M0 336c0 79.5 64.5 144 144 144H512c70.7 0 128-57.3 128-128c0-61.9-44-113.6-102.4-125.4c4.1-10.7 6.4-22.4 6.4-34.6c0-53-43-96-96-96c-19.7 0-38.1 6-53.3 16.2C367 64.2 315.3 32 256 32C167.6 32 96 103.6 96 192c0 2.7 .1 5.4 .2 8.1C40.2 219.8 0 273.2 0 336z"></path>
-</svg>
-<div class="sa-summary-metric-value" v-text="internetConnection"></div>
-</div>
-</div>
-</div>
-</div>
-</div>
-</div>
-<div class="sa-section-stack">
-<div class="sa-stack-item">
-<div class="sa-panel sa-dashboard-network-panel">
-<div class="sa-panel-header sa-panel-header-tools">
-<div class="sa-panel-title-tools">
-<span>网络信息</span>
-<button @click="toggleNetworkCompact()" class="btn btn-sm btn-outline-secondary sa-compact-toggle" type="button" v-text="compactNetworkInfo ? t('完整显示') : t('精简显示')"></button>
-<button :aria-label="sensitiveVisible ? '隐藏敏感信息' : '显示敏感信息'" :title="sensitiveVisible ? '隐藏敏感信息' : '显示敏感信息'" @click="toggleSensitiveVisible()" class="btn btn-sm sa-eye-toggle" type="button">
-<span :class="['sa-eye-icon', sensitiveVisible ? 'sa-eye-open' : 'sa-eye-closed']" aria-hidden="true"></span>
-</button>
-</div>
-</div>
-<div class="sa-panel-body">
-<div class="sa-panel-text table-responsive-sm">
-<table class="table sa-data-table sa-luci-info-table">
-<tbody>
-<tr>
-<th scope="row">激活 SIM</th>
-<td v-text="formatActiveSimStatus()"></td>
-</tr>
-<tr>
-<th scope="row">运营商</th>
-<td v-text="network_provider"></td>
-</tr>
-<tr v-if="!compactNetworkInfo">
-<th scope="row">MCCMNC</th>
-<td v-text="mccmnc"></td>
-</tr>
-<tr>
-<th scope="row">APN</th>
-<td v-text="apn"></td>
-</tr>
-<tr>
-<th scope="row">网络模式</th>
-<td v-text="network_mode"></td>
-</tr>
-<tr>
-<th scope="row">频段</th>
-<td v-text="bands"></td>
-</tr>
-<tr>
-<th scope="row">带宽</th>
-<td v-text="bandwidth"></td>
-</tr>
-<tr>
-<th scope="row">PCI</th>
-<td v-show="scc_pci != '-'" v-text="pcc_pci + ' / ' + scc_pci"></td>
-<td v-show="scc_pci == '-'" v-text="pcc_pci"></td>
-</tr>
-<tr>
-<th scope="row">IPv<sup>4</sup></th>
-<td v-text="formatSensitiveValue(ipv4, 'ipv4')"></td>
-</tr>
-<tr>
-<th scope="row">IPv<sup>6</sup></th>
-<td v-text="formatSensitiveValue(ipv6, 'ipv6')"></td>
-</tr>
-<tr v-if="!compactNetworkInfo">
-<th scope="row">CELL ID</th>
-<td v-text="formatSensitiveValue(cellID, 'id')"></td>
-</tr>
-<tr v-if="!compactNetworkInfo">
-<th scope="row">eNB ID <sup>4G/5G</sup></th>
-<td v-text="formatSensitiveValue(eNBID, 'id')"></td>
-</tr>
-<tr>
-<th scope="row">E/ARFCN<sup>4G/5G</sup></th>
-<td v-text="earfcns"></td>
-</tr>
-<tr v-if="!compactNetworkInfo">
-<th scope="row">TAC<sup>4G/5G</sup></th>
-<td v-text="formatSensitiveValue(tac, 'id')"></td>
-</tr>
-<tr>
-<th scope="row">累计流量<sup>DL/UL</sup></th>
-<td v-text="nr_rx_human + ' / ' + nr_tx_human"></td>
-</tr>
-<tr>
-<th scope="row">速率<sup>DL/UL</sup></th>
-<td v-text="nr_dl_speed + ' / ' + nr_ul_speed"></td>
-</tr>
-<tr>
-<th scope="row">信号评估</th>
-<td v-text="signalAssessment"></td>
-</tr>
-<tr>
-<th scope="row">RSRP<sup>PRX/DRX/RX2/RX3</sup></th>
-<td v-text="prxqrsrp + '  ' + drxqrsrp + '  ' + rx2qrsrp + '  ' + rx3qrsrp"></td>
-</tr>
-
-
-
-<tr>
-<th scope="row">在线时长</th>
-<td v-text="uptime"></td>
-</tr>
-</tbody>
-</table>
-</div>
-</div>
-<div class="sa-panel-footer">
-<div class="sa-dashboard-footer-line">
-<div class="sa-dashboard-refresh-control">
-<span class="sa-inline-label">刷新频率（最少 2 秒）</span>
-<div class="input-group sa-refresh-input-group">
-<input :placeholder="refreshRate + 's'" class="form-control" max="60" min="2" type="number" v-model="newRefreshRate"/>
-<button @click="updateRefreshRate()" class="btn btn-outline-secondary" type="button">设置</button>
-</div>
-</div>
-<div class="sa-dashboard-update-time">
-<span class="sa-inline-label">更新时间</span>
-<span class="sa-inline-value" v-text="lastUpdate"></span>
-</div>
-</div>
-</div>
-</div>
-</div>
+<section class="art-chart-section art-ping-section" aria-labelledby="pingChartTitle">
+<div class="art-section-heading"><div><h2 id="pingChartTitle">延迟与抖动</h2><span>ICMP · 1 秒采样</span></div><form class="art-target-form" @submit.prevent="saveTarget"><label class="visually-hidden" for="pingTarget">Ping 目标</label><input id="pingTarget" :disabled="saving" v-model="targetInput" @input="targetDirty = true" class="form-control" placeholder="www.baidu.com" maxlength="253" required autocomplete="off" spellcheck="false"/><button class="btn btn-primary" :disabled="saving || !targetDirty" type="submit">{{ saving ? '保存中…' : '应用' }}</button></form></div>
+<p class="art-target-message" role="status" v-if="targetMessage">{{ targetMessage }}</p>
+<p class="art-target-message is-error" role="alert" v-if="error">{{ error }} <button class="art-text-button" @click="refresh" type="button">重试</button></p>
+<div class="art-chart-wrap"><div id="pingChart" class="art-chart art-ping-chart" role="img" aria-label="最近五分钟延迟、抖动和失败采样走势图"></div><div class="art-chart-empty" v-if="!snapshot.ping.length">等待首次采样</div></div>
+<div class="art-chart-footer"><span>平均 <b>{{ number(snapshot.summary.average) }}</b> ms</span><span>最低 <b>{{ number(snapshot.summary.minimum) }}</b> ms</span><span>最高 <b>{{ number(snapshot.summary.maximum) }}</b> ms</span><span class="art-failure-key">失败 {{ failedSamples }} 次</span><span>{{ latestPing && latestPing.ip ? latestPing.ip : snapshot.target }}</span></div>
+</section>
 </div>
 </section>
 <section aria-labelledby="page-title-network" class="sa-page" data-page="network" id="page-network">
@@ -586,6 +451,39 @@
 </div>
 <div class="sa-page-app sa-single-column" id="settingsApp" v-cloak="">
 <div class="sa-section-stack">
+<section aria-labelledby="accountSecurityHeading" class="sa-stack-item sa-account-security">
+<h2 id="accountSecurityHeading" class="sa-panel-header">账户安全 · Web 登录密码</h2>
+<form @submit.prevent="changeLoginPassword()" class="sa-panel-body">
+<div class="sa-password-fields">
+<div>
+<label class="form-label" for="currentPasswordInput">当前密码</label>
+<input :disabled="isSavingPassword" autocomplete="current-password" class="form-control" id="currentPasswordInput" placeholder="请输入当前登录密码" required type="password" v-model="currentPassword"/>
+</div>
+<div>
+<label class="form-label" for="newPasswordInput">新密码</label>
+<input :disabled="isSavingPassword" autocomplete="new-password" class="form-control" id="newPasswordInput" placeholder="请输入新的登录密码" required type="password" v-model="newPassword"/>
+</div>
+<div>
+<label class="form-label" for="confirmPasswordInput">确认新密码</label>
+<input :disabled="isSavingPassword" autocomplete="new-password" class="form-control" id="confirmPasswordInput" placeholder="请再次输入新的登录密码" required type="password" v-model="confirmPassword"/>
+</div>
+</div>
+<button :disabled="isSavingPassword" class="btn btn-primary" type="submit">修改密码</button>
+<div aria-live="polite" class="form-text" role="status" v-show="passwordSaveMessage" v-text="passwordSaveMessage"></div>
+</form>
+</section>
+<section class="sa-stack-item sa-account-security" aria-labelledby="rootSecurityHeading">
+<h2 id="rootSecurityHeading" class="sa-panel-header">系统 root 密码</h2>
+<form @submit.prevent="changeRootPassword()" class="sa-panel-body">
+<div class="sa-password-fields">
+<div><label class="form-label" for="currentRootPassword">当前 root 密码</label><input id="currentRootPassword" class="form-control" type="password" autocomplete="current-password" required :disabled="isSavingRootPassword" v-model="currentRootPassword"/></div>
+<div><label class="form-label" for="newRootPassword">新 root 密码</label><input id="newRootPassword" class="form-control" type="password" autocomplete="new-password" required :disabled="isSavingRootPassword" v-model="newRootPassword"/></div>
+<div><label class="form-label" for="confirmRootPassword">确认新 root 密码</label><input id="confirmRootPassword" class="form-control" type="password" autocomplete="new-password" required :disabled="isSavingRootPassword" v-model="confirmRootPassword"/></div>
+</div>
+<button class="btn btn-primary" type="submit" :disabled="isSavingRootPassword">修改 root 密码</button>
+<div class="form-text" role="status" aria-live="polite" v-text="rootPasswordSaveMessage"></div>
+</form>
+</section>
 <div class="sa-stack-item">
 <div class="sa-panel">
 <div class="sa-panel-header">AT 终端</div>
@@ -763,9 +661,11 @@
 <div class="sa-settings-account-card sa-panel-text">
 <label class="form-label" for="languageSelect">界面语言</label>
 <div class="input-group sa-inline-control">
-<select class="form-select" id="languageSelect" v-model="language">
+<select class="form-select" id="languageSelect" v-model="language" data-no-i18n dir="ltr">
 <option value="zh-CN">中文</option>
 <option value="en">English</option>
+<option value="ru">Русский</option>
+<option value="ar">العربية</option>
 </select>
 <button :disabled="isSavingLanguage" @click="saveLanguageSetting()" class="btn btn-primary" type="button">
                       保存
@@ -794,26 +694,6 @@
                     设置 TTL 值为 0 以禁用。
                   </div>
 </div>
-</div>
-<div class="sa-settings-account-card sa-panel-text">
-<label class="form-label" for="currentPasswordInput">登录密码</label>
-<div class="sa-section-stack sa-password-stack">
-<div class="sa-stack-item">
-<input autocomplete="current-password" class="form-control" id="currentPasswordInput" placeholder="请输入当前登录密码" type="password" v-model="currentPassword"/>
-</div>
-<div class="sa-stack-item">
-<input autocomplete="new-password" class="form-control" id="newPasswordInput" placeholder="请输入新的登录密码" type="password" v-model="newPassword"/>
-</div>
-<div class="sa-stack-item">
-<input @keydown.enter="changeLoginPassword()" autocomplete="new-password" class="form-control" id="confirmPasswordInput" placeholder="请再次输入新的登录密码" type="password" v-model="confirmPassword"/>
-</div>
-<div class="sa-stack-item">
-<button :disabled="isSavingPassword" @click="changeLoginPassword()" class="btn btn-primary" type="button">
-                      修改密码
-                    </button>
-</div>
-</div>
-<div class="form-text" v-show="passwordSaveMessage" v-text="passwordSaveMessage"></div>
 </div>
 </div>
 </div>
@@ -1153,12 +1033,15 @@
 </div>
 </div>
 <script src="js/populate-checkbox.js?v=2.94"></script>
-<script src="js/pages/index.js?v=2.94"></script>
+<script src="js/pages/index.js?v=3.3"></script>
 <script src="js/pages/network.js?v=2.94"></script>
-<script src="js/pages/settings.js?v=2.94"></script>
+<script src="js/pages/settings.js?v=3.3"></script>
 <script src="js/pages/sms.js?v=2.94"></script>
 <script src="js/pages/deviceinfo.js?v=2.94"></script>
 <script src="js/simpleadmin-spa.js?v=2.94"></script>
 <script src="js/dark-mode.js?v=2.94"></script>
+<script src="js/monitor-vendor.js?v=3.2"></script>
+<script src="js/monitor.js?v=3.3"></script>
+<script src="js/art-device.js?v=3.3"></script>
 </body>
 </html>

@@ -28,7 +28,6 @@ const websocketGUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 const (
 	nativeConsoleUsername         = "root"
-	nativeConsolePassword         = "admin321"
 	nativeConsoleMaxLoginAttempts = 3
 )
 
@@ -38,6 +37,7 @@ const nativeConsoleHTML = `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Terminal</title>
+<script src="/js/locales.js?v=3.3"></script>
 <style>
 html,body{height:100%;margin:0;overflow:hidden;background:#050505;color:#f2f2f2;font-family:Consolas,Menlo,monospace}
 body{display:flex;flex-direction:column;min-height:0}
@@ -50,8 +50,8 @@ body{display:flex;flex-direction:column;min-height:0}
 </style>
 </head>
 <body>
-<div id="bar"><strong>Terminal</strong><span id="state">connecting...</span><span id="hint">Click here and type. Ctrl+C / Ctrl+D / arrows are supported.</span></div>
-<pre id="term" class="cursor" tabindex="0"></pre>
+<div id="bar"><strong>控制台</strong><span id="state">连接中...</span></div>
+<pre id="term" class="cursor" tabindex="0" dir="ltr" data-no-i18n></pre>
 <script>
 (function(){
   var term=document.getElementById('term');
@@ -62,7 +62,7 @@ body{display:flex;flex-direction:column;min-height:0}
   var ws=new WebSocket(scheme+'://'+location.host+'/api/console/ws');
   ws.binaryType='arraybuffer';
 
-  function setState(text){ state.textContent=text; }
+  function setState(text){ state.textContent=({connected:'已连接',closed:'未连接',error:'读取失败'})[text] || text; }
   function scrollBottom(){ term.scrollTop=term.scrollHeight; }
   var ansiState={fg:'',bg:'',bold:false,dim:false,underline:false};
   var ansiCarry='';
@@ -298,6 +298,7 @@ func (s *simpleAdminServer) handleNativeConsoleWebSocket(w http.ResponseWriter, 
 		return
 	}
 	ws := &nativeWSConn{conn: conn, br: rw.Reader}
+	_ = conn.SetDeadline(time.Now().Add(webSocketWriteTimeout))
 	accept := websocketAcceptKey(r.Header.Get("Sec-WebSocket-Key"))
 	_, _ = rw.Writer.WriteString("HTTP/1.1 101 Switching Protocols\r\n")
 	_, _ = rw.Writer.WriteString("Upgrade: websocket\r\n")
@@ -309,8 +310,17 @@ func (s *simpleAdminServer) handleNativeConsoleWebSocket(w http.ResponseWriter, 
 	}
 
 	defer conn.Close()
+	_ = conn.SetDeadline(time.Time{})
+	untrack, ok := s.trackSessionConnection(r, conn, func() error { return ws.writeFrame(0x9, nil) })
+	if !ok {
+		return
+	}
+	defer untrack()
 
-	if !authenticateNativeConsole(ws) {
+	if !s.authenticateNativeConsole(ws) {
+		return
+	}
+	if !s.isRequestAuthenticated(r) {
 		return
 	}
 
@@ -334,6 +344,7 @@ func (s *simpleAdminServer) handleNativeConsoleWebSocket(w http.ResponseWriter, 
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
+		defer conn.Close()
 		buf := make([]byte, 4096)
 		for {
 			n, err := shell.master.Read(buf)
@@ -355,6 +366,9 @@ func (s *simpleAdminServer) handleNativeConsoleWebSocket(w http.ResponseWriter, 
 		}
 		switch opcode {
 		case 0x1, 0x2, 0x0:
+			if !s.isRequestAuthenticated(r) {
+				return
+			}
 			if len(payload) > 0 {
 				if _, err := shell.master.Write(payload); err != nil {
 					return
@@ -407,7 +421,7 @@ func normalizeOriginHost(host string) string {
 	return host
 }
 
-func authenticateNativeConsole(ws *nativeWSConn) bool {
+func (s *simpleAdminServer) authenticateNativeConsole(ws *nativeWSConn) bool {
 	_ = ws.writeBinary([]byte("Terminal login required\r\n"))
 	for attempt := 0; attempt < nativeConsoleMaxLoginAttempts; attempt++ {
 		username, ok := readNativeConsoleLine(ws, "login: ", false)
@@ -418,7 +432,10 @@ func authenticateNativeConsole(ws *nativeWSConn) bool {
 		if !ok {
 			return false
 		}
-		if constantTimeEqual(strings.TrimSpace(username), nativeConsoleUsername) && constantTimeEqual(password, nativeConsolePassword) {
+		s.authMu.Lock()
+		valid := constantTimeEqual(strings.TrimSpace(username), nativeConsoleUsername) && s.rootPasswordMatches(password)
+		s.authMu.Unlock()
+		if valid {
 			_ = ws.writeBinary([]byte("\r\n"))
 			return true
 		}
@@ -507,6 +524,9 @@ func websocketAcceptKey(key string) string {
 }
 
 func (ws *nativeWSConn) readClientFrame() (byte, []byte, error) {
+	if err := ws.conn.SetReadDeadline(time.Now().Add(webSocketReadTimeout)); err != nil {
+		return 0, nil, err
+	}
 	for {
 		header := make([]byte, 2)
 		if _, err := io.ReadFull(ws.br, header); err != nil {
@@ -564,6 +584,9 @@ func (ws *nativeWSConn) writeClose() error {
 func (ws *nativeWSConn) writeFrame(opcode byte, payload []byte) error {
 	ws.mu.Lock()
 	defer ws.mu.Unlock()
+	if err := ws.conn.SetWriteDeadline(time.Now().Add(webSocketWriteTimeout)); err != nil {
+		return err
+	}
 
 	header := []byte{0x80 | opcode}
 	length := len(payload)

@@ -1,8 +1,5 @@
 #!/bin/sh
 
-AUTH_FILE="/usrdata/simpleadmin/simpleadmin.auth"
-USER_NAME="admin"
-
 echo "请设置 SimpleAdmin（用户：admin）网页登录密码。"
 printf "请输入新密码: "
 stty -echo
@@ -15,10 +12,23 @@ if [ -z "$PASSWORD" ]; then
     exit 1
 fi
 
-mkdir -p /usrdata/simpleadmin
-umask 077
-printf "%s:%s\n" "$USER_NAME" "$PASSWORD" > "$AUTH_FILE"
-chmod 600 "$AUTH_FILE"
+printf "%s\n" "$PASSWORD" | SIMPLEADMIN_MANAGE_ROOTFS=1 /usrdata/simpleadmin/simpleadmin-httpd passwd
+SAVE_STATUS=$?
+unset PASSWORD
+if [ "$SAVE_STATUS" -ne 0 ] && [ "$SAVE_STATUS" -ne 2 ]; then
+    echo "密码保存失败，请检查挂载状态。" >&2
+    exit 1
+fi
 
-systemctl restart simpleadmin-httpd >/dev/null 2>&1 || true
+if ! systemctl restart simpleadmin-httpd >/dev/null 2>&1; then
+    /usrdata/simpleadmin/stop_simpleadmin.sh >/dev/null 2>&1
+    /usrdata/simpleadmin/start_simpleadmin.sh >/dev/null 2>&1 || {
+        echo "密码已写入，服务重启失败。" >&2
+        exit 1
+    }
+fi
+if [ "$SAVE_STATUS" -eq 2 ]; then
+    echo "密码已写入，旧会话已清除，但文件同步或恢复只读失败，请检查挂载状态。" >&2
+    exit 1
+fi
 echo "密码已设置。"

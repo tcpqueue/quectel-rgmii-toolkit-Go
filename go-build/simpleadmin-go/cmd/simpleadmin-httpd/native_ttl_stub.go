@@ -6,7 +6,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -45,9 +44,11 @@ func printLines(lines []string) {
 func applySavedTTLAtStartup() {}
 
 func setNativeTTL(value int) []string {
-	logs := applyNativeTTL(value, true)
+	logs := applyNativeTTL(value, false)
 	if err := writeTTLValue(value); err != nil {
 		logs = append(logs, "failed to write ttlvalue: "+err.Error())
+	} else {
+		logs = append(logs, "TTL value saved")
 	}
 	return logs
 }
@@ -115,11 +116,5 @@ func writeTTLValue(value int) error {
 	if value < 0 || value > 255 {
 		return fmt.Errorf("invalid TTL value: %d", value)
 	}
-	dir := filepath.Dir(runtimeTTLValueFile)
-	if dir != "." {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return err
-		}
-	}
-	return os.WriteFile(runtimeTTLValueFile, []byte(strconv.Itoa(value)+"\n"), 0644)
+	return writePersistentFile(runtimeTTLValueFile, []byte(strconv.Itoa(value)+"\n"), 0644)
 }

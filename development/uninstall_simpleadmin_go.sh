@@ -18,11 +18,15 @@ warn() {
 }
 
 remount_rw() {
-    mount -o remount,rw / >/dev/null 2>&1 || true
+    mount -o remount,rw / || exit 1
+    trap 'mount -o remount,ro / || echo "[错误] 根目录恢复只读失败" >&2' EXIT
+    trap 'exit 1' INT TERM
 }
 
 remount_ro() {
-    mount -o remount,ro / >/dev/null 2>&1 || true
+    sync
+    mount -o remount,ro / || exit 1
+    trap - EXIT INT TERM
 }
 
 stop_service() {
@@ -73,7 +77,7 @@ remove_unit() {
 
 clear_go_ttl_rules() {
     if [ -x "$SIMPLEADMIN_DIR/simpleadmin-httpd" ]; then
-        "$SIMPLEADMIN_DIR/simpleadmin-httpd" ttl off >/dev/null 2>&1 || warn "清理 Go 原生 TTL 规则失败"
+        SIMPLEADMIN_MANAGE_ROOTFS=0 "$SIMPLEADMIN_DIR/simpleadmin-httpd" ttl off >/dev/null 2>&1 || warn "清理 Go 原生 TTL 规则失败"
     fi
 }
 
@@ -93,6 +97,8 @@ remove_simpleadmin_go_files() {
     rm -f "$SIMPLEADMIN_DIR/zbims-ca.key"
     rm -f "$SIMPLEADMIN_DIR/at_devices.conf"
     rm -f "$SIMPLEADMIN_DIR/ttlvalue"
+    rm -f "$SIMPLEADMIN_DIR/monitor.json"
+    rm -f /tmp/simpleadmin-httpd.pid
     rm -f "$SIMPLEADMIN_DIR/bridge0_mac"
     rm -f "$SIMPLEADMIN_DIR/mobileap_bridge0_mac.sh"
     rm -f "$SIMPLEADMIN_DIR/socat-armel-static"

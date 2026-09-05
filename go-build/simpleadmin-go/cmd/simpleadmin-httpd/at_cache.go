@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -19,6 +20,8 @@ const (
 	atCachePeriodicInterval  = 15 * time.Second
 	atCacheFirstRefreshDelay = 500 * time.Millisecond
 	atCacheBootGracePeriod   = 35 * time.Second
+	atCacheMaxEntries        = 256
+	atCacheBusyText          = "ERROR: AT queue is busy; retry later."
 )
 
 type atCacheEntry struct {
@@ -27,7 +30,7 @@ type atCacheEntry struct {
 	errorText string
 	updatedAt time.Time
 	running   bool
-	waiters   []chan struct{}
+	done      chan struct{}
 }
 
 type atCommandCacheManager struct {
@@ -102,7 +105,11 @@ func (m *atCommandCacheManager) Fetch(command string, force bool, waitOverride *
 	mustRun := force || isATActionCommand(command) || !has || stale
 	var done <-chan struct{}
 	if mustRun {
-		done = m.enqueue(command, force || isATActionCommand(command))
+		var err error
+		done, err = m.enqueue(command, force || isATActionCommand(command))
+		if err != nil {
+			return err.Error()
+		}
 		running = true
 	}
 
@@ -118,6 +125,7 @@ func (m *atCommandCacheManager) Fetch(command string, force bool, waitOverride *
 		select {
 		case <-done:
 		case <-time.After(atCacheWaitTimeout(command)):
+			return atCachePendingText
 		}
 		has, response, errorText, _, running = m.snapshot(command)
 	}
@@ -156,43 +164,49 @@ func (m *atCommandCacheManager) snapshot(command string) (bool, string, string, 
 	return has, e.response, e.errorText, stale, e.running
 }
 
-func (m *atCommandCacheManager) enqueue(command string, force bool) <-chan struct{} {
+func (m *atCommandCacheManager) enqueue(command string, force bool) (<-chan struct{}, error) {
 	command = sanitizeATCommand(command)
 	done := make(chan struct{})
 	if command == "" {
 		close(done)
-		return done
+		return done, nil
 	}
 
 	m.mu.Lock()
+	defer m.mu.Unlock()
 	e := m.entries[command]
 	if e == nil {
+		if len(m.entries) >= atCacheMaxEntries {
+			oldest := ""
+			for key, entry := range m.entries {
+				if !entry.running && (oldest == "" || entry.updatedAt.Before(m.entries[oldest].updatedAt)) {
+					oldest = key
+				}
+			}
+			if oldest == "" {
+				return nil, errors.New(atCacheBusyText)
+			}
+			delete(m.entries, oldest)
+		}
 		e = &atCacheEntry{command: command}
-		m.entries[command] = e
 	}
 	if e.running {
-		e.waiters = append(e.waiters, done)
-		m.mu.Unlock()
-		return done
+		return e.done, nil
 	}
 	if !force && !e.updatedAt.IsZero() && time.Since(e.updatedAt) < maxAgeForATCacheCommand(command) {
-		m.mu.Unlock()
 		close(done)
-		return done
+		return done, nil
 	}
-	e.running = true
-	e.waiters = append(e.waiters, done)
-	m.mu.Unlock()
 
 	select {
 	case m.queue <- command:
+		e.running = true
+		e.done = done
+		m.entries[command] = e
 	default:
-		go func() {
-			m.waitUntilReadyFor(command)
-			m.run(command)
-		}()
+		return nil, errors.New(atCacheBusyText)
 	}
-	return done
+	return done, nil
 }
 
 func (m *atCommandCacheManager) run(command string) {
@@ -221,12 +235,12 @@ func (m *atCommandCacheManager) run(command string) {
 	e.errorText = errorText
 	e.updatedAt = time.Now()
 	e.running = false
-	waiters := e.waiters
-	e.waiters = nil
+	done := e.done
+	e.done = nil
 	m.mu.Unlock()
 
-	for _, waiter := range waiters {
-		close(waiter)
+	if done != nil {
+		close(done)
 	}
 	if err != nil {
 		log.Printf("AT 后台缓存更新失败: command=%q error=%v", command, err)

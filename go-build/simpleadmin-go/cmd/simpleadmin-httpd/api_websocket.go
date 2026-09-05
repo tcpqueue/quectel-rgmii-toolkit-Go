@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/binary"
@@ -15,6 +16,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 )
 
 const apiWebSocketGUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
@@ -100,6 +102,7 @@ func (s *simpleAdminServer) handleAPIWebSocket(w http.ResponseWriter, r *http.Re
 		return
 	}
 	ws := &apiWebSocketConn{conn: conn, br: rw.Reader}
+	_ = conn.SetDeadline(time.Now().Add(webSocketWriteTimeout))
 	accept := apiWebSocketAcceptKey(r.Header.Get("Sec-WebSocket-Key"))
 	_, _ = rw.Writer.WriteString("HTTP/1.1 101 Switching Protocols\r\n")
 	_, _ = rw.Writer.WriteString("Upgrade: websocket\r\n")
@@ -112,6 +115,13 @@ func (s *simpleAdminServer) handleAPIWebSocket(w http.ResponseWriter, r *http.Re
 	registerAPIWebSocketClient(ws)
 	defer unregisterAPIWebSocketClient(ws)
 	defer conn.Close()
+	_ = conn.SetDeadline(time.Time{})
+	r = r.WithContext(context.WithValue(r.Context(), apiConnectionContextKey{}, conn))
+	untrack, ok := s.trackSessionConnection(r, conn, func() error { return ws.writeFrame(0x9, nil) })
+	if !ok {
+		return
+	}
+	defer untrack()
 
 	for {
 		opcode, payload, err := ws.readClientFrame()
@@ -122,6 +132,9 @@ func (s *simpleAdminServer) handleAPIWebSocket(w http.ResponseWriter, r *http.Re
 		case 0x1, 0x2:
 			resp := s.dispatchAPIWebSocketRequest(r, payload)
 			if err := ws.writeJSON(resp); err != nil {
+				return
+			}
+			if resp.Status == http.StatusUnauthorized || !s.isRequestAuthenticated(r) {
 				return
 			}
 		case 0x8:
@@ -143,6 +156,11 @@ func (s *simpleAdminServer) dispatchAPIWebSocketRequest(base *http.Request, payl
 		return apiWebSocketResponse{Status: http.StatusBadRequest, Body: "", Error: "invalid json request: " + err.Error()}
 	}
 	resp := apiWebSocketResponse{ID: req.ID, Status: http.StatusOK}
+	if !s.isRequestAuthenticated(base) {
+		resp.Status = http.StatusUnauthorized
+		resp.Body = `{"ok":false,"error":"login required"}`
+		return resp
+	}
 
 	method := strings.ToUpper(strings.TrimSpace(req.Method))
 	if method == "" {
@@ -178,6 +196,7 @@ func (s *simpleAdminServer) dispatchAPIWebSocketRequest(base *http.Request, payl
 	httpReq = httpReq.WithContext(base.Context())
 	httpReq.Host = base.Host
 	httpReq.RemoteAddr = base.RemoteAddr
+	httpReq.TLS = base.TLS
 	for name, values := range base.Header {
 		if strings.EqualFold(name, "Connection") || strings.EqualFold(name, "Upgrade") || strings.EqualFold(name, "Sec-WebSocket-Key") || strings.EqualFold(name, "Sec-WebSocket-Version") {
 			continue
@@ -187,7 +206,9 @@ func (s *simpleAdminServer) dispatchAPIWebSocketRequest(base *http.Request, payl
 		}
 	}
 	for name, value := range req.Headers {
-		httpReq.Header.Set(name, value)
+		if strings.EqualFold(name, "Content-Type") {
+			httpReq.Header.Set(name, value)
+		}
 	}
 	if req.Body != "" && httpReq.Header.Get("Content-Type") == "" {
 		httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
@@ -243,6 +264,9 @@ func apiWebSocketAcceptKey(key string) string {
 }
 
 func (ws *apiWebSocketConn) readClientFrame() (byte, []byte, error) {
+	if err := ws.conn.SetReadDeadline(time.Now().Add(webSocketReadTimeout)); err != nil {
+		return 0, nil, err
+	}
 	for {
 		header := make([]byte, 2)
 		if _, err := io.ReadFull(ws.br, header); err != nil {
@@ -304,6 +328,9 @@ func (ws *apiWebSocketConn) writeClose() error {
 func (ws *apiWebSocketConn) writeFrame(opcode byte, payload []byte) error {
 	ws.mu.Lock()
 	defer ws.mu.Unlock()
+	if err := ws.conn.SetWriteDeadline(time.Now().Add(webSocketWriteTimeout)); err != nil {
+		return err
+	}
 
 	header := bytes.NewBuffer([]byte{0x80 | opcode})
 	length := len(payload)
