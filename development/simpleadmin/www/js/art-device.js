@@ -1,6 +1,19 @@
 (function () {
   'use strict';
   function init() {
+    const languageSelect = document.getElementById('headerLanguage');
+    const lang = window.SimpleAdmin.Lang;
+    languageSelect.value = lang.getCurrentLanguage();
+    languageSelect.addEventListener('change', () => lang.setLanguage(languageSelect.value));
+    const syncLanguage = () => {
+      languageSelect.value = lang.getCurrentLanguage();
+      languageSelect.setAttribute('aria-label', lang.t('语言'));
+      Object.values(window.SimpleAdmin.Vue.apps || {}).forEach(app => {
+        if ('language' in app) app.language = lang.getCurrentLanguage();
+      });
+    };
+    window.addEventListener('simpleadmin:language-changed', syncLanguage);
+    syncLanguage();
     if (window.SimpleAdminIcons) window.SimpleAdminIcons();
     const sidebar = document.getElementById('simpleadminSidebar');
     const backdrop = document.getElementById('artSidebarBackdrop');

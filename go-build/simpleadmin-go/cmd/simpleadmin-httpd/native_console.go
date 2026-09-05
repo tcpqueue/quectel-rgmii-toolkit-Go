@@ -37,6 +37,7 @@ const nativeConsoleHTML = `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Terminal</title>
+<script src="/js/locales.js?v=3.3"></script>
 <style>
 html,body{height:100%;margin:0;overflow:hidden;background:#050505;color:#f2f2f2;font-family:Consolas,Menlo,monospace}
 body{display:flex;flex-direction:column;min-height:0}
@@ -49,8 +50,8 @@ body{display:flex;flex-direction:column;min-height:0}
 </style>
 </head>
 <body>
-<div id="bar"><strong>Terminal</strong><span id="state">connecting...</span><span id="hint">Click here and type. Ctrl+C / Ctrl+D / arrows are supported.</span></div>
-<pre id="term" class="cursor" tabindex="0"></pre>
+<div id="bar"><strong>控制台</strong><span id="state">连接中...</span></div>
+<pre id="term" class="cursor" tabindex="0" dir="ltr" data-no-i18n></pre>
 <script>
 (function(){
   var term=document.getElementById('term');
@@ -61,7 +62,7 @@ body{display:flex;flex-direction:column;min-height:0}
   var ws=new WebSocket(scheme+'://'+location.host+'/api/console/ws');
   ws.binaryType='arraybuffer';
 
-  function setState(text){ state.textContent=text; }
+  function setState(text){ state.textContent=({connected:'已连接',closed:'未连接',error:'读取失败'})[text] || text; }
   function scrollBottom(){ term.scrollTop=term.scrollHeight; }
   var ansiState={fg:'',bg:'',bold:false,dim:false,underline:false};
   var ansiCarry='';

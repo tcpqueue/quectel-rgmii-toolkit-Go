@@ -38,12 +38,13 @@
 <link href="css/bootstrap.min.css" rel="stylesheet"/>
 <link href="css/Poppins.css?v=2.94" rel="stylesheet"/>
 <link href="css/styles.css?v=2.94" rel="stylesheet"/>
-<link href="css/art-device.css?v=3.2" rel="stylesheet"/>
+<link href="css/art-device.css?v=3.3" rel="stylesheet"/>
 <link href="favicon.ico" rel="icon"/>
 <script src="js/band_map.js?v=2.94"></script>
 <script defer="" src="js/bootstrap.bundle.min.js"></script>
 <script src="js/vue.global.prod.js"></script>
-<script src="js/simpleadmin-core.js?v=2.94"></script>
+<script src="js/locales.js?v=3.3"></script>
+<script src="js/simpleadmin-core.js?v=3.3"></script>
 <script src="js/vue-app.js?v=2.94"></script>
 </head>
 <body>
@@ -95,6 +96,7 @@
 <div class="art-header-right">
 <button aria-label="切换明暗主题" title="切换明暗主题" class="art-icon-button" id="artThemeButton" type="button"><i data-lucide="moon" aria-hidden="true"></i></button>
 <button aria-label="全屏" title="全屏" class="art-icon-button" id="artFullscreenButton" type="button"><i data-lucide="maximize" aria-hidden="true"></i></button>
+<select id="headerLanguage" class="art-language" aria-label="语言" data-no-i18n dir="ltr"><option value="zh-CN">中文</option><option value="en">English</option><option value="ru">Русский</option><option value="ar">العربية</option></select>
 <a class="art-account" data-page-link="settings" href="#settings" title="账户设置"><span class="art-avatar">A</span><span>管理员</span></a>
 </div>
 </header>
@@ -659,9 +661,11 @@
 <div class="sa-settings-account-card sa-panel-text">
 <label class="form-label" for="languageSelect">界面语言</label>
 <div class="input-group sa-inline-control">
-<select class="form-select" id="languageSelect" v-model="language">
+<select class="form-select" id="languageSelect" v-model="language" data-no-i18n dir="ltr">
 <option value="zh-CN">中文</option>
 <option value="en">English</option>
+<option value="ru">Русский</option>
+<option value="ar">العربية</option>
 </select>
 <button :disabled="isSavingLanguage" @click="saveLanguageSetting()" class="btn btn-primary" type="button">
                       保存
@@ -1029,15 +1033,15 @@
 </div>
 </div>
 <script src="js/populate-checkbox.js?v=2.94"></script>
-<script src="js/pages/index.js?v=3.2"></script>
+<script src="js/pages/index.js?v=3.3"></script>
 <script src="js/pages/network.js?v=2.94"></script>
-<script src="js/pages/settings.js?v=3.1"></script>
+<script src="js/pages/settings.js?v=3.3"></script>
 <script src="js/pages/sms.js?v=2.94"></script>
 <script src="js/pages/deviceinfo.js?v=2.94"></script>
 <script src="js/simpleadmin-spa.js?v=2.94"></script>
 <script src="js/dark-mode.js?v=2.94"></script>
 <script src="js/monitor-vendor.js?v=3.2"></script>
-<script src="js/monitor.js?v=3.2"></script>
-<script src="js/art-device.js?v=3.0"></script>
+<script src="js/monitor.js?v=3.3"></script>
+<script src="js/art-device.js?v=3.3"></script>
 </body>
 </html>

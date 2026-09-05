@@ -1,9 +1,10 @@
 (function (global) {
   'use strict';
 
+  const t = text => global.SimpleAdmin && global.SimpleAdmin.Lang ? global.SimpleAdmin.Lang.t(text) : text;
   const statusNames = { ok: '链路正常', timeout: '应答超时', dns_error: 'DNS 解析失败', permission_error: 'ICMP 权限不足', unavailable: '网络不可达', pending: '等待采样' };
   const number = value => value === null || value === undefined || !Number.isFinite(Number(value)) ? '--' : Number(value).toFixed(1);
-  const clock = value => new Date(value).toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const clock = value => new Date(value).toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
   function chartOptions(snapshot, radio, colors, compact) {
     const axis = { axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: colors.muted, fontSize: 11 }, splitLine: { lineStyle: { color: colors.border, type: 'dashed' } } };
@@ -14,7 +15,7 @@
       legend: { top: 6, left: 20, itemWidth: 8, itemHeight: 8, icon: 'circle', textStyle: { color: colors.text, fontSize: 12 } },
       tooltip: { trigger: 'axis', renderMode: 'richText', confine: true, backgroundColor: colors.surface, borderColor: colors.border, textStyle: { color: colors.text, fontSize: 12 }, formatter(params) {
         if (!params.length) return '';
-        return clock(params[0].value[0]) + '\n' + params.map(item => item.seriesName + '  ' + (item.seriesName === '失败' ? (statusNames[item.value[2]] || '检测失败') : number(item.value[1]))).join('\n');
+        return clock(params[0].value[0]) + '\n' + params.map(item => item.seriesName + '  ' + (item.seriesName === t('失败') ? t(statusNames[item.value[2]] || '检测失败') : number(item.value[1]))).join('\n');
       } },
       xAxis: { ...axis, type: 'time', min: snapshot.serverTime - 300000, max: snapshot.serverTime, splitNumber: compact ? 3 : 5, splitLine: { show: false }, axisLabel: { ...axis.axisLabel, formatter: value => clock(value).slice(0, 5), hideOverlap: true } }
     });
@@ -36,15 +37,15 @@
     const temperature = {
       ...base(), grid: { top: 54, bottom: 34, left: 46, right: 22 },
       yAxis: { ...axis, type: 'value', name: '°C', min: value => Number.isFinite(value.min) ? Math.floor((value.min - 3) / 5) * 5 : 20, max: value => Number.isFinite(value.max) ? Math.ceil((value.max + 3) / 5) * 5 : 80 },
-      series: [{ ...line('温度', points('temperature'), '#ef9063'), areaStyle: { color: '#ef9063', opacity: 0.07 } }]
+      series: [{ ...line(t('温度'), points('temperature'), '#ef9063'), areaStyle: { color: '#ef9063', opacity: 0.07 } }]
     };
     const ping = {
       ...base(), grid: { top: 50, bottom: 32, left: 48, right: 24 },
       yAxis: { ...axis, type: 'value', name: 'ms', min: 0 },
       series: [
-        line('延迟', snapshot.ping.map(sample => [sample.time, sample.rtt]), '#5d87ff'),
-        line('抖动', snapshot.ping.map(sample => [sample.time, sample.jitter]), '#13b99a'),
-        { name: '失败', type: 'scatter', symbolSize: 7, itemStyle: { color: '#e95766' }, data: snapshot.ping.filter(sample => sample.status !== 'ok').map(sample => [sample.time, 0, sample.status]) }
+        line(t('延迟'), snapshot.ping.map(sample => [sample.time, sample.rtt]), '#5d87ff'),
+        line(t('抖动'), snapshot.ping.map(sample => [sample.time, sample.jitter]), '#13b99a'),
+        { name: t('失败'), type: 'scatter', symbolSize: 7, itemStyle: { color: '#e95766' }, data: snapshot.ping.filter(sample => sample.status !== 'ok').map(sample => [sample.time, 0, sample.status]) }
       ]
     };
     return { signal, temperature, ping };
@@ -77,7 +78,7 @@
       for (const key of ['signal', 'temperature', 'ping']) {
         if (!charts[key]) charts[key] = global.SimpleAdminCharts.init(document.getElementById(key + 'Chart'));
         charts[key].resize();
-        charts[key].setOption(options[key]);
+        charts[key].setOption(options[key], { notMerge: true });
       }
     };
     const update = data => {
@@ -154,6 +155,7 @@
     }).mount(element);
     const visibility = () => { stop(); if (active()) { app.$nextTick(render); app.refresh(); } };
     global.addEventListener('simpleadmin:page-changed', visibility);
+    global.addEventListener('simpleadmin:language-changed', render);
     document.addEventListener('visibilitychange', visibility);
     const observer = new ResizeObserver(() => { if (active()) render(); });
     observer.observe(element);

@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>获取中... 登录</title>
+<script src="js/locales.js?v=3.3"></script>
 <script>
 (function () {
   try {
@@ -101,6 +102,10 @@ body {
 .login-title { font-size: 22px; font-weight: 800; line-height: 1.1; }
 .login-subtitle { margin-top: 4px; color: var(--muted); font-size: 13px; }
 .form-row { display: grid; gap: 8px; margin-top: 14px; }
+.language-select { width: 100%; min-height: 44px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; color: var(--text); background: var(--field); font: inherit; }
+.login-title { overflow-wrap: anywhere; }
+html[dir="rtl"] .login-actions { right: auto; left: 16px; }
+#username, #password, .login-title, .login-mark { direction: ltr; }
 label { font-size: 13px; font-weight: 700; color: var(--text); }
 input {
   width: 100%;
@@ -143,8 +148,12 @@ button:disabled { opacity: .65; cursor: wait; }
     </div>
     <form id="loginForm" autocomplete="on">
       <div class="form-row">
+        <label for="loginLanguage">语言</label>
+        <select id="loginLanguage" class="language-select" data-no-i18n dir="ltr"><option value="zh-CN">中文</option><option value="en">English</option><option value="ru">Русский</option><option value="ar">العربية</option></select>
+      </div>
+      <div class="form-row">
         <label for="username">用户名</label>
-        <input id="username" name="username" autocomplete="username" required autofocus>
+        <input id="username" name="username" autocomplete="username" required>
       </div>
       <div class="form-row">
         <label for="password">密码</label>
@@ -161,6 +170,13 @@ button:disabled { opacity: .65; cursor: wait; }
   const button = document.getElementById('loginButton');
   const message = document.getElementById('loginMessage');
   const themeToggle = document.getElementById('themeToggle');
+  const lang = window.SimpleAdmin.Lang;
+  const languageSelect = document.getElementById('loginLanguage');
+  languageSelect.value = lang.getCurrentLanguage();
+  languageSelect.addEventListener('change', () => lang.setLanguage(languageSelect.value));
+  window.addEventListener('simpleadmin:language-changed', () => {
+    document.title = (document.querySelector('[data-simpleadmin-brand-title]').textContent || 'SimpleAdmin') + ' · ' + lang.t('登录');
+  });
   function applyTheme(theme) {
     const normalized = theme === 'dark' ? 'dark' : 'light';
     document.documentElement.setAttribute('data-bs-theme', normalized);
@@ -188,7 +204,7 @@ button:disabled { opacity: .65; cursor: wait; }
     document.querySelectorAll('[data-simpleadmin-brand-mark]').forEach(function (element) {
       element.textContent = modelMark(model);
     });
-    document.title = model + ' 登录';
+    document.title = model + ' · ' + lang.t('登录');
     try { localStorage.setItem('simpleadmin.moduleModelName', model); } catch (e) {}
   }
   function initBrandModel() {

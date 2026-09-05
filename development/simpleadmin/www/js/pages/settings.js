@@ -72,7 +72,7 @@ function simpleSettings() {
           if (!SimpleAdmin.Lang) return;
           this.isSavingLanguage = true;
           this.languageSaveMessage = "";
-          SimpleAdmin.Lang.setLanguage(this.language, { save: true })
+          SimpleAdmin.Lang.setLanguage(this.language)
             .then((language) => {
               this.language = language;
               this.languageSaveMessage = this.t("已保存");

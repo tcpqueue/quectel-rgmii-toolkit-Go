@@ -322,7 +322,7 @@ function getStaticNetworkInfo() {
         const label = unitMap[unit] || unit;
         return `${amount} ${label}${amount === 1 ? '' : 's'}`;
       }
-      return `${amount} ${unit}`;
+      return `${amount} ${this.t(unit)}`;
     },
 
     formatUptimeParts(parts) {

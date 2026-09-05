@@ -337,7 +337,7 @@ func (s *simpleAdminServer) sessionAuth(next http.Handler) http.Handler {
 
 func isPublicAuthPath(path string) bool {
 	switch path {
-	case "/login.html", "/logout.html", "/api/login", "/api/logout", "/api/module_model":
+	case "/login.html", "/logout.html", "/js/locales.js", "/api/login", "/api/logout", "/api/module_model":
 		return true
 	default:
 		return false
@@ -818,6 +818,10 @@ func normalizeLanguage(value string) string {
 		return "zh-CN"
 	case "en", "en-us", "english":
 		return "en"
+	case "ru", "ru-ru", "russian":
+		return "ru"
+	case "ar", "ar-sa", "arabic":
+		return "ar"
 	default:
 		return ""
 	}
