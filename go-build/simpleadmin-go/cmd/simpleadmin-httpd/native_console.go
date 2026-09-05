@@ -298,6 +298,7 @@ func (s *simpleAdminServer) handleNativeConsoleWebSocket(w http.ResponseWriter, 
 		return
 	}
 	ws := &nativeWSConn{conn: conn, br: rw.Reader}
+	_ = conn.SetDeadline(time.Now().Add(webSocketWriteTimeout))
 	accept := websocketAcceptKey(r.Header.Get("Sec-WebSocket-Key"))
 	_, _ = rw.Writer.WriteString("HTTP/1.1 101 Switching Protocols\r\n")
 	_, _ = rw.Writer.WriteString("Upgrade: websocket\r\n")
@@ -309,8 +310,17 @@ func (s *simpleAdminServer) handleNativeConsoleWebSocket(w http.ResponseWriter, 
 	}
 
 	defer conn.Close()
+	_ = conn.SetDeadline(time.Time{})
+	untrack, ok := s.trackSessionConnection(r, conn, func() error { return ws.writeFrame(0x9, nil) })
+	if !ok {
+		return
+	}
+	defer untrack()
 
 	if !authenticateNativeConsole(ws) {
+		return
+	}
+	if !s.isRequestAuthenticated(r) {
 		return
 	}
 
@@ -334,6 +344,7 @@ func (s *simpleAdminServer) handleNativeConsoleWebSocket(w http.ResponseWriter, 
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
+		defer conn.Close()
 		buf := make([]byte, 4096)
 		for {
 			n, err := shell.master.Read(buf)
@@ -355,6 +366,9 @@ func (s *simpleAdminServer) handleNativeConsoleWebSocket(w http.ResponseWriter, 
 		}
 		switch opcode {
 		case 0x1, 0x2, 0x0:
+			if !s.isRequestAuthenticated(r) {
+				return
+			}
 			if len(payload) > 0 {
 				if _, err := shell.master.Write(payload); err != nil {
 					return
@@ -507,6 +521,9 @@ func websocketAcceptKey(key string) string {
 }
 
 func (ws *nativeWSConn) readClientFrame() (byte, []byte, error) {
+	if err := ws.conn.SetReadDeadline(time.Now().Add(webSocketReadTimeout)); err != nil {
+		return 0, nil, err
+	}
 	for {
 		header := make([]byte, 2)
 		if _, err := io.ReadFull(ws.br, header); err != nil {
@@ -564,6 +581,9 @@ func (ws *nativeWSConn) writeClose() error {
 func (ws *nativeWSConn) writeFrame(opcode byte, payload []byte) error {
 	ws.mu.Lock()
 	defer ws.mu.Unlock()
+	if err := ws.conn.SetWriteDeadline(time.Now().Add(webSocketWriteTimeout)); err != nil {
+		return err
+	}
 
 	header := []byte{0x80 | opcode}
 	length := len(payload)

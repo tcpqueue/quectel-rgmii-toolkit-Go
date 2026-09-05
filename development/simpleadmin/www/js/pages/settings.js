@@ -85,6 +85,7 @@ function simpleSettings() {
         },
 
         changeLoginPassword() {
+          if (this.isSavingPassword) return;
           this.passwordSaveMessage = "";
           if (!this.currentPassword || !this.newPassword) {
             this.passwordSaveMessage = this.t("请输入当前密码和新密码");
@@ -96,7 +97,7 @@ function simpleSettings() {
           }
 
           this.isSavingPassword = true;
-          SimpleAdmin.Api.setPassword(this.currentPassword, this.newPassword, this.confirmPassword)
+          return SimpleAdmin.Api.setPassword(this.currentPassword, this.newPassword, this.confirmPassword)
             .then((res) => {
               return res.json().catch(() => ({})).then((data) => ({ res, data }));
             })
@@ -118,6 +119,7 @@ function simpleSettings() {
               this.newPassword = "";
               this.confirmPassword = "";
               this.passwordSaveMessage = this.t("密码已保存，请使用新密码重新登录。");
+              window.location.replace('/login.html');
             })
             .catch((error) => {
               console.error("保存登录密码失败：", error);

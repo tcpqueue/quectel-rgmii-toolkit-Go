@@ -1626,10 +1626,30 @@ code,
   }
 }
 
-/* 设置页：界面语言和登录密码在其他设置里按左右两竖列显示 */
+/* 设置页账户与偏好设置 */
+.sa-account-security {
+  border-bottom: 1px solid var(--sa-border);
+}
+
+.sa-account-security h2 {
+  font-size: 18px;
+  margin: 0;
+}
+
+.sa-password-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.sa-password-fields > div {
+  min-width: 0;
+}
+
 .sa-page-app .sa-settings-account-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   align-items: start;
 }
@@ -1679,11 +1699,8 @@ code,
   color: var(--sa-text-soft);
 }
 
-.sa-page-app .sa-password-stack {
-  gap: 8px !important;
-}
-
 @media (max-width: 991.98px) {
+  .sa-password-fields,
   .sa-page-app .sa-settings-account-grid {
     grid-template-columns: 1fr;
   }

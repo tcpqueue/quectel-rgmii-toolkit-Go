@@ -225,7 +225,7 @@
           new_password: newPassword || '',
           confirm_password: confirmPassword || ''
         });
-        return request('/api/set_password', {
+        return fetch('/api/set_password', {
           method: 'POST',
           cache: 'no-store',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
@@ -606,6 +606,7 @@
         '保存失败': 'Save failed',
         '语言已保存。': 'Language saved.',
         '登录密码': 'Login Password',
+        '账户安全': 'Account Security',
         '当前密码': 'Current Password',
         '新密码': 'New Password',
         '确认新密码': 'Confirm New Password',
@@ -1210,4 +1211,3 @@
   }
 
 })(window);
-

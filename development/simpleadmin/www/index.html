@@ -586,6 +586,27 @@
 </div>
 <div class="sa-page-app sa-single-column" id="settingsApp" v-cloak="">
 <div class="sa-section-stack">
+<section aria-labelledby="accountSecurityHeading" class="sa-stack-item sa-account-security">
+<h2 id="accountSecurityHeading" class="sa-panel-header">账户安全</h2>
+<form @submit.prevent="changeLoginPassword()" class="sa-panel-body">
+<div class="sa-password-fields">
+<div>
+<label class="form-label" for="currentPasswordInput">当前密码</label>
+<input :disabled="isSavingPassword" autocomplete="current-password" class="form-control" id="currentPasswordInput" placeholder="请输入当前登录密码" required type="password" v-model="currentPassword"/>
+</div>
+<div>
+<label class="form-label" for="newPasswordInput">新密码</label>
+<input :disabled="isSavingPassword" autocomplete="new-password" class="form-control" id="newPasswordInput" placeholder="请输入新的登录密码" required type="password" v-model="newPassword"/>
+</div>
+<div>
+<label class="form-label" for="confirmPasswordInput">确认新密码</label>
+<input :disabled="isSavingPassword" autocomplete="new-password" class="form-control" id="confirmPasswordInput" placeholder="请再次输入新的登录密码" required type="password" v-model="confirmPassword"/>
+</div>
+</div>
+<button :disabled="isSavingPassword" class="btn btn-primary" type="submit">修改密码</button>
+<div aria-live="polite" class="form-text" role="status" v-show="passwordSaveMessage" v-text="passwordSaveMessage"></div>
+</form>
+</section>
 <div class="sa-stack-item">
 <div class="sa-panel">
 <div class="sa-panel-header">AT 终端</div>
@@ -794,26 +815,6 @@
                     设置 TTL 值为 0 以禁用。
                   </div>
 </div>
-</div>
-<div class="sa-settings-account-card sa-panel-text">
-<label class="form-label" for="currentPasswordInput">登录密码</label>
-<div class="sa-section-stack sa-password-stack">
-<div class="sa-stack-item">
-<input autocomplete="current-password" class="form-control" id="currentPasswordInput" placeholder="请输入当前登录密码" type="password" v-model="currentPassword"/>
-</div>
-<div class="sa-stack-item">
-<input autocomplete="new-password" class="form-control" id="newPasswordInput" placeholder="请输入新的登录密码" type="password" v-model="newPassword"/>
-</div>
-<div class="sa-stack-item">
-<input @keydown.enter="changeLoginPassword()" autocomplete="new-password" class="form-control" id="confirmPasswordInput" placeholder="请再次输入新的登录密码" type="password" v-model="confirmPassword"/>
-</div>
-<div class="sa-stack-item">
-<button :disabled="isSavingPassword" @click="changeLoginPassword()" class="btn btn-primary" type="button">
-                      修改密码
-                    </button>
-</div>
-</div>
-<div class="form-text" v-show="passwordSaveMessage" v-text="passwordSaveMessage"></div>
 </div>
 </div>
 </div>

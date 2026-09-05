@@ -147,11 +147,14 @@ func runServeCommand(args []string) {
 	atCommandCache.Start(cfg.mockMode)
 
 	app := &simpleAdminServer{cfg: cfg}
+	cleanupContext, stopCleanup := context.WithCancel(context.Background())
+	defer stopCleanup()
+	go app.cleanupSessions(cleanupContext)
 	handler := app.routes()
 
 	if cfg.noTLS {
 		log.Printf("ZBIMS HTTP 服务启动: %s", cfg.httpAddr)
-		log.Fatal(http.ListenAndServe(cfg.httpAddr, handler))
+		log.Fatal(newHTTPServer(cfg.httpAddr, handler).ListenAndServe())
 		return
 	}
 
@@ -169,19 +172,21 @@ func runServeCommand(args []string) {
 			http.Redirect(w, r, target, http.StatusMovedPermanently)
 		})
 		log.Printf("HTTP 重定向服务启动: %s", cfg.httpAddr)
-		if err := http.ListenAndServe(cfg.httpAddr, redirectHandler); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := newHTTPServer(cfg.httpAddr, redirectHandler).ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Printf("HTTP 重定向服务退出: %v", err)
 		}
 	}()
 
 	log.Printf("ZBIMS HTTPS 服务启动: %s", cfg.httpsAddr)
-	log.Fatal(http.ListenAndServeTLS(cfg.httpsAddr, cfg.certFile, cfg.keyFile, handler))
+	log.Fatal(newHTTPServer(cfg.httpsAddr, handler).ListenAndServeTLS(cfg.certFile, cfg.keyFile))
 }
 
 type simpleAdminServer struct {
-	cfg       serverConfig
-	sessionMu sync.Mutex
-	sessions  map[string]time.Time
+	cfg                serverConfig
+	authMu             sync.Mutex
+	sessionMu          sync.Mutex
+	sessions           map[string]time.Time
+	sessionConnections map[net.Conn]string
 
 	modelMu           sync.RWMutex
 	cachedModuleModel string
@@ -191,6 +196,7 @@ func (s *simpleAdminServer) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/login", s.handleLogin)
 	mux.HandleFunc("/api/logout", s.handleLogout)
+	mux.HandleFunc("/api/set_password", s.handleSetPassword)
 	mux.HandleFunc("/api/module_model", s.handleModuleModel)
 	mux.HandleFunc("/login.html", s.handleLoginPage)
 	mux.HandleFunc("/logout.html", s.handleLogoutPage)
@@ -319,13 +325,16 @@ func (s *simpleAdminServer) handleLogin(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"ok": false, "error": "method not allowed"})
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 4096)
+	if err := r.ParseForm(); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "error": "invalid form"})
+		return
+	}
+	s.authMu.Lock()
+	defer s.authMu.Unlock()
 	auth, err := loadAuthConfig(s.cfg.authFile)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"ok": false, "error": "auth config error"})
-		return
-	}
-	if err := r.ParseForm(); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "error": "invalid form"})
 		return
 	}
 	username := r.FormValue("username")
@@ -390,8 +399,19 @@ func (s *simpleAdminServer) createSession(expiresAt time.Time) (string, error) {
 	}
 	token := hex.EncodeToString(buf)
 	s.sessionMu.Lock()
+	s.pruneSessionsLocked(time.Now())
 	if s.sessions == nil {
 		s.sessions = make(map[string]time.Time)
+	}
+	if len(s.sessions) >= maxSessions {
+		var oldestToken string
+		var oldestExpiry time.Time
+		for existing, expiry := range s.sessions {
+			if oldestToken == "" || expiry.Before(oldestExpiry) {
+				oldestToken, oldestExpiry = existing, expiry
+			}
+		}
+		s.revokeSessionLocked(oldestToken, nil)
 	}
 	s.sessions[token] = expiresAt
 	s.sessionMu.Unlock()
@@ -410,7 +430,7 @@ func (s *simpleAdminServer) validateSession(token string) bool {
 		return false
 	}
 	if !expiresAt.After(now) {
-		delete(s.sessions, token)
+		s.revokeSessionLocked(token, nil)
 		return false
 	}
 	s.sessions[token] = now.Add(sessionDuration)
@@ -423,9 +443,7 @@ func (s *simpleAdminServer) destroyRequestSession(r *http.Request) {
 		return
 	}
 	s.sessionMu.Lock()
-	if s.sessions != nil {
-		delete(s.sessions, cookie.Value)
-	}
+	s.revokeSessionLocked(cookie.Value, nil)
 	s.sessionMu.Unlock()
 }
 
@@ -936,6 +954,17 @@ func (s *simpleAdminServer) handleSetPassword(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	if r.Header.Get("Origin") != "" && !apiWebSocketOriginAllowed(r) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "origin forbidden"})
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 4096)
+	if err := r.ParseForm(); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid form"})
+		return
+	}
+	s.authMu.Lock()
+	defer s.authMu.Unlock()
 	auth, err := loadAuthConfig(s.cfg.authFile)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "auth config error"})
@@ -972,7 +1001,12 @@ func (s *simpleAdminServer) handleSetPassword(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	// Keep the requesting WebSocket alive only long enough to deliver this response.
+	current, _ := r.Context().Value(apiConnectionContextKey{}).(net.Conn)
+	s.revokeAllSessions(current)
+	clearSessionCookie(w, r)
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "redirect": "/login.html"})
 }
 
 func (s *simpleAdminServer) handleGetTTLStatus(w http.ResponseWriter, r *http.Request) {
